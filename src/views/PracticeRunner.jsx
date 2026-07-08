@@ -70,9 +70,24 @@ export default function PracticeRunner() {
 
       try {
         const allPracticeData = DataManager.cache.practiceManifest || window.allPracticeData || {};
-        const chapterIds = chapter === "all" ? Object.keys(allPracticeData[subject] || {}) : [chapter];
+        let chapterIds = [];
+        
+        if (chapter === "all") {
+          const subjData = allPracticeData[subject] || {};
+          // Extract real IDs if subjData is an array of objects
+          chapterIds = Object.entries(subjData).map(([k, v]) => {
+            if (typeof v === 'object' && v !== null) {
+              return v.id || v.testId || v.docId || k;
+            }
+            return k;
+          });
+        } else {
+          chapterIds = [chapter];
+        }
 
         const promises = chapterIds.map((chapId) => {
+          // If chapId is already the full docId, this might be fine, or maybe it still needs prefixing?
+          // Based on original logic, docId = subject.replace(...) + "_" + chapId
           const docId = subject.replace(/\s+/g, "_") + "_" + chapId;
           return DataManager.fetchPracticeQuestions(docId);
         });
@@ -292,7 +307,7 @@ export default function PracticeRunner() {
 
           <div>
             <div style={{ fontSize: 17, fontWeight: 500, marginBottom: 24, lineHeight: 1.6 }}>
-              <span dangerouslySetInnerHTML={{ __html: TextFormatter.formatQuestionText(question.text) }} />
+              <span dangerouslySetInnerHTML={{ __html: TextFormatter.formatQuestionText(question.text || question.question) }} />
             </div>
 
             <div className="grid">

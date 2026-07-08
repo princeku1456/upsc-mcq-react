@@ -532,7 +532,7 @@ export default function QuizFlow() {
             style={s.isTimerPaused ? { filter: "blur(8px)", pointerEvents: "none" } : { filter: "none" }}
           >
             <div style={{ fontSize: 17, fontWeight: 500, marginBottom: 24, lineHeight: 1.6 }}>
-              <span dangerouslySetInnerHTML={{ __html: TextFormatter.formatQuestionText(question.text) }} />
+              <span dangerouslySetInnerHTML={{ __html: TextFormatter.formatQuestionText(question.text || question.question) }} />
             </div>
 
             <div className="grid">

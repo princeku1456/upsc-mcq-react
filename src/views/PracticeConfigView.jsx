@@ -136,9 +136,20 @@ export default function PracticeConfigView() {
               }}
             >
               <option value="all">All Topics (Mixed)</option>
-              {chapters.map((cId) => (
-                <option key={cId} value={cId}>{currentSubjectData[cId]}</option>
-              ))}
+              {chapters.map((key) => {
+                const val = currentSubjectData[key];
+                let cId = key;
+                let label = val;
+                
+                if (typeof val === 'object' && val !== null) {
+                  cId = Array.isArray(currentSubjectData) ? (val.id || val.testId || val.docId || key) : key;
+                  label = val.title || val.name || val.chapterName || `Topic ${cId}`;
+                }
+                
+                return (
+                  <option key={cId} value={cId}>{label}</option>
+                );
+              })}
             </select>
           </div>
 

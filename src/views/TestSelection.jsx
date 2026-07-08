@@ -133,7 +133,7 @@ export function SubjectsView() {
 /* ---------- CHAPTERS ---------- */
 export function ChaptersView() {
   const { subjectKey } = useParams();
-  const { loadQuiz } = useApp();
+  const { loadQuiz, g } = useApp();
   const navigate = useNavigate();
   
   const [allQuizData, setAllQuizData] = useState(
@@ -212,26 +212,59 @@ export function ChaptersView() {
       </div>
 
       <div className="chapters-grid">
-        {Object.entries(chaptersMap).map(([cId, cName]) => (
-          <div key={cId} className="card" style={{ display: "flex", flexDirection: "column" }}>
-            <h3 className="card__title" style={{ marginBottom: 14, flex: 1 }}>{cName}</h3>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                className="btn btn--primary btn--block"
-                onClick={() => loadQuiz(subject, cId, cName)}
-              >
-                Start Test
-              </button>
-              <button
-                className="btn btn--ghost"
-                onClick={() => navigate("/dashboard")}
-                title="View Stats"
-              >
-                📊
-              </button>
+        {Object.entries(chaptersMap).map(([key, val]) => {
+          let cId = key;
+          let cName = val;
+
+          // Robustly handle cases where val is an object or array
+          if (typeof val === 'object' && val !== null) {
+            cId = Array.isArray(chaptersMap) ? (val.id || val.testId || val.docId || key) : key;
+            cName = val.title || val.name || val.chapterName || JSON.stringify(val);
+          }
+          if (typeof cName !== 'string' || !cName.trim()) {
+            cName = `Test ${key}`;
+          }
+
+          // Check if user has already taken this test to enable Review Mode
+          let pastData = null;
+          if (g.userHistory) {
+            // Find the most recent attempt for this chapter (check both real ID and old index-based ID)
+            pastData = g.userHistory.find(r => r.chapterId === cId || r.chapterId === key || r.chapterName === cName);
+          }
+
+          return (
+            <div key={cId} className="card" style={{ display: "flex", flexDirection: "column" }}>
+              <h3 className="card__title" style={{ marginBottom: 14, flex: 1 }}>{cName}</h3>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  className="btn btn--primary"
+                  style={{ flex: 1 }}
+                  onClick={() => loadQuiz(subject, cId, cName)}
+                >
+                  {pastData ? "Retake Test" : "Start Test"}
+                </button>
+                {pastData && (
+                  <button
+                    className="btn btn--success"
+                    onClick={() => loadQuiz(subject, cId, cName, true, pastData, "chapters")}
+                    title="Review Test"
+                    style={{ padding: "0 12px" }}
+                  >
+                    👁 Review
+                  </button>
+                )}
+                <button
+                  className="btn btn--ghost"
+                  onClick={() => navigate("/dashboard")}
+                  title="View Stats"
+                  style={{ padding: "0 12px" }}
+                >
+                  📊
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {revisionModalOpen && (
