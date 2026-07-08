@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useApp } from "../store";
 
 /* =========================================
-   GLOBAL LOADER (premium loader from index.html)
+   GLOBAL LOADER
    ========================================= */
 export function GlobalLoader() {
   const { globalLoaderVisible } = useApp();
@@ -10,7 +10,6 @@ export function GlobalLoader() {
 
   useEffect(() => {
     if (!globalLoaderVisible) {
-      // Same behaviour as hideGlobalLoader(): fade then remove after 500ms
       const t = setTimeout(() => setGone(true), 500);
       return () => clearTimeout(t);
     }
@@ -19,23 +18,12 @@ export function GlobalLoader() {
   if (gone) return null;
 
   return (
-    <div
-      id="global-loader"
-      className={`global-loader ${!globalLoaderVisible ? "loader-hidden" : ""}`}
-    >
-      <div className="loader-wrapper">
-        <div className="premium-loader">
-          <div className="ring"></div>
-          <div className="ring"></div>
-          <div className="ring"></div>
-          <span className="loader-icon">✨</span>
-        </div>
-        <div className="loader-text-container">
-          <h5 className="loader-title">MCQ Practice</h5>
-          <div className="loader-status">
-            <span className="dot-pulse"></span>
-            Initializing secure session
-          </div>
+    <div className={`global-loader ${!globalLoaderVisible ? "global-loader--hidden" : ""}`}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+        <div className="spinner spinner--lg"></div>
+        <div style={{ textAlign: "center" }}>
+          <h4 style={{ margin: "0 0 4px" }}>MCQ Practice</h4>
+          <span className="eyebrow">Initializing session…</span>
         </div>
       </div>
     </div>
@@ -43,7 +31,7 @@ export function GlobalLoader() {
 }
 
 /* =========================================
-   NAVBAR (theme toggle + user dropdown)
+   NAVBAR
    ========================================= */
 export function Navbar() {
   const { currentUser, theme, toggleTheme, handleLogoClick, showDashboard, logoutUser } =
@@ -65,76 +53,49 @@ export function Navbar() {
     currentUser && currentUser.email ? currentUser.email.split("@")[0] : "User";
 
   return (
-    <nav className="navbar navbar-expand-lg navbar-dark main-navbar sticky-top">
-      <div className="container">
-        <a
-          className="navbar-brand fw-bold"
-          href="#"
-          onClick={(e) => {
-            e.preventDefault();
-            handleLogoClick();
-          }}
+    <nav className="nav">
+      <button className="nav__brand" onClick={handleLogoClick}>
+        <span className="nav__mark">✦</span>
+        MCQ Practice
+      </button>
+
+      <div className="nav__right">
+        <button
+          className="nav__icon"
+          onClick={toggleTheme}
+          title="Toggle Theme"
+          aria-label="Toggle Theme"
         >
-          ✨ MCQ Practice
-        </a>
-        <div className="d-flex align-items-center gap-3">
-          <button
-            className="btn btn-outline-light btn-sm rounded-circle d-flex align-items-center justify-content-center theme-toggle-btn"
-            id="theme-toggle"
-            onClick={toggleTheme}
-            style={{ width: 38, height: 38, fontSize: "1.2rem" }}
-            title="Toggle Theme"
-          >
-            {theme === "dark" ? "☀️" : "🌙"}
-          </button>
-          {currentUser && (
-            <div className="dropdown" id="user-profile" ref={dropdownRef}>
+          {theme === "dark" ? "☀️" : "🌙"}
+        </button>
+
+        {currentUser && (
+          <div className="dropdown" ref={dropdownRef}>
+            <button
+              className="nav__icon"
+              style={{ fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}
+              onClick={() => setDropdownOpen((v) => !v)}
+            >
+              <span className="nav__user">{userName}</span>
+              <span style={{ fontSize: 10 }}>▼</span>
+            </button>
+            <div className={`dropdown__menu ${dropdownOpen ? "dropdown__menu--open" : ""}`}>
               <button
-                className="btn btn-link text-white text-decoration-none dropdown-toggle fw-bold"
-                type="button"
-                onClick={() => setDropdownOpen((v) => !v)}
+                className="dropdown__item"
+                onClick={() => { setDropdownOpen(false); showDashboard(); }}
               >
-                <span id="user-name-display">{userName}</span>
+                📊 Dashboard
               </button>
-              <ul
-                className={`dropdown-menu dropdown-menu-end shadow ${
-                  dropdownOpen ? "show" : ""
-                }`}
-                style={dropdownOpen ? { position: "absolute", right: 0 } : {}}
+              <div className="dropdown__divider"></div>
+              <button
+                className="dropdown__item dropdown__item--danger"
+                onClick={() => { setDropdownOpen(false); logoutUser(); }}
               >
-                <li>
-                  <a
-                    className="dropdown-item"
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setDropdownOpen(false);
-                      showDashboard();
-                    }}
-                  >
-                    📊 Dashboard
-                  </a>
-                </li>
-                <li>
-                  <hr className="dropdown-divider" />
-                </li>
-                <li>
-                  <a
-                    className="dropdown-item text-danger"
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setDropdownOpen(false);
-                      logoutUser();
-                    }}
-                  >
-                    🚪 Logout
-                  </a>
-                </li>
-              </ul>
+                🚪 Logout
+              </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </nav>
   );

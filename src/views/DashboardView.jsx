@@ -1,26 +1,19 @@
-/* =========================================
-   3. DASHBOARD (ported from dashboard.js + index.html markup)
-   All calculations are byte-for-byte identical; only the rendering
-   layer changed from imperative DOM writes to React state.
-   ========================================= */
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { marked } from "marked";
 import { useApp } from "../store";
 import { DataManager } from "../lib/dataManager";
 import { ChartHelper } from "../lib/chartHelper";
-import {
-  calculateConfidenceStats,
-  DifficultyHelper,
-} from "../lib/helpers";
+import { calculateConfidenceStats, DifficultyHelper } from "../lib/helpers";
 import { toastr } from "../lib/toastr";
+import { useNavigate } from "react-router-dom";
 
 export default function DashboardView() {
-  const { currentUser, g, theme, showTestSelection, startPracticeSelection } =
-    useApp();
+  const { currentUser, g, theme } = useApp();
+  const navigate = useNavigate();
 
   const [loaded, setLoaded] = useState(g.dashboardDataLoaded);
   const [dashMode, setDashMode] = useState(g.currentDashboardMode);
-  const [conceptGap, setConceptGap] = useState({ text: "0%", cls: "border-info" });
+  const [conceptGap, setConceptGap] = useState({ text: "0%", cls: "stat--pen" });
   const [aiState, setAiState] = useState({ loading: false, html: null, error: false });
 
   const perfChartRef = useRef(null);
@@ -44,24 +37,13 @@ export default function DashboardView() {
       }
 
       try {
-        // Incrementally sync user history (Smart Sync)
-        const historyData = await DataManager.syncUserHistory(
-          currentUser.uid,
-          forceRefresh
-        );
-        const practiceData = await DataManager.syncPracticeHistory(
-          currentUser.uid,
-          forceRefresh
-        );
+        const historyData = await DataManager.syncUserHistory(currentUser.uid, forceRefresh);
+        const practiceData = await DataManager.syncPracticeHistory(currentUser.uid, forceRefresh);
 
         if (cancelled) return;
 
-        if (historyData) {
-          g.userHistory = historyData;
-        }
-        if (practiceData) {
-          g.practiceHistory = practiceData;
-        }
+        if (historyData) g.userHistory = historyData;
+        if (practiceData) g.practiceHistory = practiceData;
 
         if (historyData || practiceData) {
           g.dashboardDataLoaded = true;
@@ -78,16 +60,13 @@ export default function DashboardView() {
     };
   }, [currentUser, g]);
 
-  /* ---- Cumulative Stats Calculation (verbatim from renderDashboardUI) ---- */
+  /* ---- Cumulative Stats Calculation (verbatim) ---- */
   const combinedHistory = [...g.userHistory, ...g.practiceHistory];
   const chartData = dashMode === "quiz" ? g.userHistory : g.practiceHistory;
 
   const totalTests = combinedHistory.length;
   const avgScore = totalTests
-    ? (
-        combinedHistory.reduce((acc, curr) => acc + curr.scorePercent, 0) /
-        totalTests
-      ).toFixed(1)
+    ? (combinedHistory.reduce((acc, curr) => acc + curr.scorePercent, 0) / totalTests).toFixed(1)
     : 0;
 
   let totalCorrect = 0,
@@ -99,8 +78,7 @@ export default function DashboardView() {
     if (res.totalMarks) {
       totalQs += res.totalMarks / 2;
     } else {
-      totalQs +=
-        (res.correctCount + res.incorrectCount + res.unattemptedCount) || 0;
+      totalQs += (res.correctCount + res.incorrectCount + res.unattemptedCount) || 0;
     }
 
     if (res.userAnswers) {
@@ -124,7 +102,7 @@ export default function DashboardView() {
     ? ((negativeLoss / positiveGain) * 100).toFixed(1)
     : 0;
 
-  /* ---- Charts (renderPerformanceChart + renderGlobalConfidenceChart) ---- */
+  /* ---- Charts ---- */
   useEffect(() => {
     const { confValues, confStats } = calculateConfidenceStats(chartData);
 
@@ -133,10 +111,7 @@ export default function DashboardView() {
       perfInstance.current = null;
     }
     if (perfChartRef.current) {
-      perfInstance.current = ChartHelper.renderPerformanceChart(
-        perfChartRef.current,
-        chartData
-      );
+      perfInstance.current = ChartHelper.renderPerformanceChart(perfChartRef.current, chartData);
     }
 
     if (confInstance.current) {
@@ -161,21 +136,16 @@ export default function DashboardView() {
         confInstance.current = null;
       }
     };
-    // Re-render charts when data loads, mode switches, or theme changes
-    // (theme dependency replicates refreshDashboardChartsOnly)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, dashMode, theme]);
 
-  /* ---- updateConceptGapStat (verbatim logic) ---- */
+  /* ---- updateConceptGapStat ---- */
   useEffect(() => {
     let cancelled = false;
     async function updateConceptGapStat(results) {
-      setConceptGap((cg) => ({ ...cg, text: "Analyzing..." }));
+      setConceptGap((cg) => ({ ...cg, text: "..." }));
 
       try {
-        const uniqueChapters = [
-          ...results.reduce((acc, r) => acc.add(r.chapterId), new Set()),
-        ];
+        const uniqueChapters = [...results.reduce((acc, r) => acc.add(r.chapterId), new Set())];
         const statsMap = {};
 
         const promises = uniqueChapters.map(async (id) => {
@@ -196,15 +166,10 @@ export default function DashboardView() {
             totalQuestionsAttempted++;
             if (!ans.isCorrect) {
               const qIdx = parseInt(index);
-              const commCorrect =
-                (stats.correctCounts && stats.correctCounts[qIdx]) || 0;
+              const commCorrect = (stats.correctCounts && stats.correctCounts[qIdx]) || 0;
               const commTotal = stats.totalAttempts || 0;
-              const diffInfo = DifficultyHelper.calculate(
-                commCorrect,
-                commTotal
-              );
+              const diffInfo = DifficultyHelper.calculate(commCorrect, commTotal);
 
-              // Flag if user missed a question that is classified as Easy
               if (diffInfo.label === "Easy") sillyMistakes++;
             }
           });
@@ -214,48 +179,36 @@ export default function DashboardView() {
           ? ((sillyMistakes / totalQuestionsAttempted) * 100).toFixed(1)
           : 0;
 
-        // Dynamic color coding based on threshold
         setConceptGap({
           text: gapPercent + "%",
-          cls: gapPercent > 15 ? "border-danger" : "border-success",
+          cls: gapPercent > 15 ? "stat--stamp" : "stat--leaf",
         });
       } catch (error) {
         console.error("Concept gap calculation error:", error);
-        setConceptGap({ text: "N/A", cls: "border-info" });
+        setConceptGap({ text: "N/A", cls: "stat--pen" });
       }
     }
     if (loaded) updateConceptGapStat([...g.userHistory, ...g.practiceHistory]);
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
 
-  /* =========================================
-     4. AI MENTOR LOGIC (generateAIReview, verbatim)
-     ========================================= */
+  /* ---- AI MENTOR ---- */
   const generateAIReview = useCallback(async () => {
     const key = await DataManager.fetchGeminiKey();
-    const GEMINI_MODEL = "gemini-flash-latest"; // Validated working alias
+    const GEMINI_MODEL = "gemini-flash-latest";
 
-    if (!key) {
-      toastr.warning(
-        "AI Service not configured in Firebase. Please contact admin."
-      );
-      console.error("Missing gemini_api_key in Firestore (app_config/keys)");
-      return;
-    }
-
-    console.log("Using Gemini Key:", key ? "Loaded" : "MISSING");
     if (!key || key === "YOUR_GEMINI_API_KEY_HERE") {
-      toastr.warning(
-        "AI Service not configured. Please contact support or check config.js"
-      );
-      console.error("Missing GEMINI_API_KEY in config.js");
+      toastr.warning("AI Service not configured. Please contact support.");
       return;
     }
 
-    setAiState({ loading: true, html: `<div class="text-center text-muted"><p>Thinking...</p></div>`, error: false });
+    setAiState({
+      loading: true,
+      html: `<div class="empty"><div class="spinner"></div><p>Analyzing performance...</p></div>`,
+      error: false,
+    });
 
     try {
       const userHistory = g.userHistory;
@@ -263,14 +216,9 @@ export default function DashboardView() {
         throw new Error("No test history available to analyze.");
       }
 
-      // --- 1. Calculate Metrics from Fresh Data ---
       const totalTests = userHistory.length;
-
       let totalScoreSum = 0;
-      let totalCorrect = 0;
-      let totalIncorrect = 0;
-      let totalAttempted = 0;
-
+      let totalCorrect = 0, totalIncorrect = 0, totalAttempted = 0;
       const subjectStats = {};
       const allTestsDetailedArray = [];
 
@@ -284,30 +232,18 @@ export default function DashboardView() {
         subjectStats[r.subject].totalScore += r.scorePercent;
         subjectStats[r.subject].count++;
 
-        let correct = 0,
-          incorrect = 0,
-          unattempted = 0;
-
+        let correct = 0, incorrect = 0, unattempted = 0;
         if (r.userAnswers) {
           for (const key in r.userAnswers) {
             const ans = r.userAnswers[key];
             totalAttempted++;
-            if (ans.isCorrect) {
-              totalCorrect++;
-              correct++;
-            } else {
-              totalIncorrect++;
-              incorrect++;
-            }
+            if (ans.isCorrect) { totalCorrect++; correct++; }
+            else { totalIncorrect++; incorrect++; }
           }
         }
-
         const totalQs = r.totalMarks ? r.totalMarks / 2 : correct + incorrect;
         unattempted = Math.max(0, totalQs - (correct + incorrect));
-
-        const dateStr = r.timestamp
-          ? new Date(r.timestamp.seconds * 1000).toLocaleDateString()
-          : "Unknown Date";
+        const dateStr = r.timestamp ? new Date(r.timestamp.seconds * 1000).toLocaleDateString() : "Unknown Date";
 
         allTestsDetailedArray.push(`
       - ${dateStr}: ${r.chapterName} (${r.subject})
@@ -316,23 +252,15 @@ export default function DashboardView() {
       }
 
       const allTestsDetailed = allTestsDetailedArray.join("\n");
-
-      const avgScore = totalTests
-        ? (totalScoreSum / totalTests).toFixed(1) + "%"
-        : "0%";
-      const precision = totalAttempted
-        ? ((totalCorrect / totalAttempted) * 100).toFixed(1) + "%"
-        : "0%";
+      const avgScore = totalTests ? (totalScoreSum / totalTests).toFixed(1) + "%" : "0%";
+      const precision = totalAttempted ? ((totalCorrect / totalAttempted) * 100).toFixed(1) + "%" : "0%";
 
       const negativeLoss = totalIncorrect * 0.66;
       const positiveGain = totalCorrect * 2;
-      const drainVal = positiveGain
-        ? ((negativeLoss / positiveGain) * 100).toFixed(1)
-        : 0;
+      const drainVal = positiveGain ? ((negativeLoss / positiveGain) * 100).toFixed(1) : 0;
       const drain = drainVal + "%";
 
-      const gapEl = document.getElementById("stat-concept-gap");
-      const gap = gapEl ? gapEl.textContent : "Pending Analysis";
+      const gap = document.getElementById("stat-concept-gap")?.textContent || "Pending Analysis";
 
       let weakestSubject = "N/A";
       let weakestScore = 100;
@@ -344,7 +272,6 @@ export default function DashboardView() {
         }
       });
 
-      // Construct Prompt (verbatim)
       const prompt = `
       Act as the **Lead Academic Strategist** for a premier UPSC Civil Services coaching institute. Your objective is to conduct a **Clinical Performance Audit** for a student using the psychometric and academic datasets provided below. 
 
@@ -383,29 +310,22 @@ export default function DashboardView() {
       - **Goal:** Move the student from "Hard Work" to "Precision Work."
     `;
 
-      // Call Gemini API
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-          }),
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
         }
       );
 
       if (!response.ok) {
         const errData = await response.json();
-        throw new Error(
-          errData.error?.message || "Failed to fetch AI response"
-        );
+        throw new Error(errData.error?.message || "Failed to fetch AI response");
       }
 
       const data = await response.json();
       const aiText = data.candidates[0].content.parts[0].text;
-
-      // Render Response using marked for full Markdown support
       const formattedText = marked.parse(aiText);
 
       setAiState({
@@ -418,7 +338,7 @@ export default function DashboardView() {
       toastr.error("AI Analysis Failed: " + error.message);
       setAiState({
         loading: false,
-        html: `<p class="text-danger">Failed to generate review. Please check the system configuration.</p>`,
+        html: `<p style="color:var(--stamp)">Failed to generate review. Please check system configuration.</p>`,
         error: true,
       });
     }
@@ -430,220 +350,116 @@ export default function DashboardView() {
   };
 
   return (
-    <section id="dashboard-section" className="py-5" style={{ minHeight: "90vh" }}>
-      <div className="container">
-        <div className="text-center mb-5">
-          <h2 className="fw-bold section-title">My Dashboard</h2>
-          <div className="title-underline mx-auto"></div>
-        </div>
+    <div className="page">
+      <div className="dash__hero">
+        <h1>My Dashboard</h1>
+        <p>Your performance analytics and learning path.</p>
+      </div>
 
-        {/* Top metric row */}
-        <div className="row row-cols-1 row-cols-md-3 row-cols-lg-5 g-3 mb-5 justify-content-center">
-          <StatCard border="border-primary" label="Tests Taken" valueClass="text-primary" value={totalTests} />
-          <StatCard border="border-warning" label="Avg. Score" valueClass="text-warning" value={avgScore + "%"} />
-          <StatCard border="border-success" label="Precision" valueClass="text-success" value={precisionRate + "%"} sub="Net Accuracy" />
-          <StatCard border="border-danger" label="Neg. Drain" valueClass="text-danger" value={negativeDrain + "%"} sub="Marks Lost" />
-          <div className="col">
-            <div className={`p-3 stat-card rounded shadow-sm border-start border-4 h-100 ${conceptGap.cls}`}>
-              <h6 className="text-muted text-uppercase small fw-bold">Concept Gap</h6>
-              <h2 className="fw-bold text-info mb-0" id="stat-concept-gap">
-                {conceptGap.text}
-              </h2>
-              <small className="text-muted">Easy Qs Missed</small>
-            </div>
-          </div>
-        </div>
-
-        {/* Question totals row */}
-        <div className="row row-cols-1 row-cols-md-5 g-3 mb-5 justify-content-center">
-          <BottomStat border="border-dark" label="Total Qs" value={totalQs} />
-          <BottomStat border="border-primary" label="Attempted" valueClass="text-primary" value={totalAttempted} />
-          <BottomStat border="border-secondary" label="Unattempted" valueClass="text-secondary" value={Math.max(0, totalUnattempted)} />
-          <BottomStat border="border-success" label="Correct" valueClass="text-success" value={totalCorrect} />
-          <BottomStat border="border-danger" label="Incorrect" valueClass="text-danger" value={totalIncorrect} />
-        </div>
-
-        {/* Action cards */}
-        <div className="row justify-content-center mb-4">
-          <div className="col-md-6">
-            <div
-              className="card topic-card shadow-sm h-100 action-card"
-              style={{ cursor: "pointer" }}
-              onClick={showTestSelection}
-              role="button"
-              tabIndex={0}
-              aria-label="Take Test"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  showTestSelection();
-                }
-              }}
-            >
-              <div className="card-body text-center p-4">
-                <div className="display-5 mb-2">🚀</div>
-                <h3 className="fw-bold card-title text-success m-0">Take Test</h3>
-              </div>
-            </div>
-          </div>
-          <div className="col-md-6">
-            <div
-              className="card topic-card shadow-sm h-100 action-card"
-              style={{ cursor: "pointer" }}
-              onClick={startPracticeSelection}
-              role="button"
-              tabIndex={0}
-              aria-label="Practice MCQ"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  startPracticeSelection();
-                }
-              }}
-            >
-              <div className="card-body text-center p-4">
-                <div className="display-5 mb-2">🎯</div>
-                <h3 className="fw-bold card-title text-info m-0">Practice MCQ</h3>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* AI Mentor */}
-        <div className="row justify-content-center mb-5">
-          <div className="col-12">
-            <div
-              className="card border-0 shadow-sm rounded-4 p-4"
-              style={{
-                background:
-                  "linear-gradient(135deg, var(--bg-card) 0%, var(--option-hover) 100%)",
-                border: "1px solid var(--border-color)",
-              }}
-            >
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <h5 className="fw-bold text-primary mb-0">✨ AI Personalized Mentor</h5>
-                <span className="badge bg-primary rounded-pill">Gemini</span>
-              </div>
-
-              <div id="ai-review-content" className="mb-3 text-muted">
-                {aiState.html ? (
-                  <div dangerouslySetInnerHTML={{ __html: aiState.html }} />
-                ) : (
-                  <p>
-                    Get a personalized performance review powered by Google
-                    Gemini AI. Analyze your weak spots, negative marking
-                    patterns, and confidence gaps.
-                  </p>
-                )}
-              </div>
-
-              <div className="d-flex gap-2 align-items-center">
-                <button
-                  className="btn btn-primary-custom px-4"
-                  onClick={generateAIReview}
-                  id="btn-generate-ai"
-                  disabled={aiState.loading}
-                >
-                  {aiState.loading && (
-                    <span
-                      className="spinner-border spinner-border-sm me-2"
-                      role="status"
-                      aria-hidden="true"
-                    ></span>
-                  )}
-                  <span id="ai-btn-text">
-                    {aiState.loading ? "Analyzing..." : "⚡ Analyze My Performance"}
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Mode toggle */}
-        <div className="row justify-content-center mb-4">
-          <div className="col-12 text-center">
-            <div className="btn-group shadow-sm" role="group" aria-label="Chart Data Source">
-              <input
-                type="radio"
-                className="btn-check"
-                name="dashMode"
-                id="mode-quiz"
-                autoComplete="off"
-                checked={dashMode === "quiz"}
-                onChange={() => switchDashboardMode("quiz")}
-              />
-              <label className="btn btn-outline-primary px-4 fw-bold" htmlFor="mode-quiz">
-                Tests Analysis
-              </label>
-
-              <input
-                type="radio"
-                className="btn-check"
-                name="dashMode"
-                id="mode-practice"
-                autoComplete="off"
-                checked={dashMode === "practice"}
-                onChange={() => switchDashboardMode("practice")}
-              />
-              <label className="btn btn-outline-primary px-4 fw-bold" htmlFor="mode-practice">
-                Practice Analysis
-              </label>
-            </div>
-          </div>
-        </div>
-
-        {/* Confidence chart */}
-        <div className="row justify-content-center mb-5">
-          <div className="col-12">
-            <div className="card border-0 shadow-sm rounded-4 p-4">
-              <h5 className="fw-bold text-primary mb-3">🎯 Overall Confidence Analysis</h5>
-              <div style={{ position: "relative", height: 300, width: "100%" }}>
-                <canvas id="globalConfidenceChart" ref={confChartRef}></canvas>
-              </div>
-              <p className="small text-muted mt-3 text-center">
-                Aggregate accuracy across all recent tests categorized by
-                confidence level.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Accuracy trend */}
-        <div className="row justify-content-center mb-5">
-          <div className="col-12">
-            <div className="card border-0 shadow-sm rounded-4 p-4">
-              <h5 className="fw-bold text-primary mb-3">📈 Accuracy Trend</h5>
-              <div style={{ position: "relative", height: 300, width: "100%" }}>
-                <canvas id="performanceChart" ref={perfChartRef}></canvas>
-              </div>
-            </div>
-          </div>
+      <div className="stats-grid" style={{ marginBottom: 28 }}>
+        <Stat variant="pen" label="Tests Taken" value={totalTests} />
+        <Stat variant="marker" label="Avg. Score" value={`${avgScore}%`} />
+        <Stat variant="leaf" label="Precision" value={`${precisionRate}%`} sub="Net Accuracy" />
+        <Stat variant="stamp" label="Neg. Drain" value={`${negativeDrain}%`} sub="Marks Lost" />
+        <div className={`stat ${conceptGap.cls}`}>
+          <span className="eyebrow">Concept Gap</span>
+          <span className="stat__value" id="stat-concept-gap">{conceptGap.text}</span>
+          <span className="stat__sub">Easy Qs Missed</span>
         </div>
       </div>
-    </section>
-  );
-}
 
-function StatCard({ border, label, value, valueClass = "", sub }) {
-  return (
-    <div className="col">
-      <div className={`p-3 stat-card rounded shadow-sm border-start border-4 ${border} h-100`}>
-        <h6 className="text-muted text-uppercase small fw-bold">{label}</h6>
-        <h2 className={`fw-bold mb-0 ${valueClass}`}>{value}</h2>
-        {sub && <small className="text-muted">{sub}</small>}
+      <div className="stats-grid" style={{ marginBottom: 28 }}>
+        <Stat label="Total Qs" value={totalQs} />
+        <Stat variant="pen" label="Attempted" value={totalAttempted} />
+        <Stat label="Unattempted" value={Math.max(0, totalUnattempted)} />
+        <Stat variant="leaf" label="Correct" value={totalCorrect} />
+        <Stat variant="stamp" label="Incorrect" value={totalIncorrect} />
+      </div>
+
+      <div className="action-grid" style={{ marginBottom: 28 }}>
+        <div className="card action-card" onClick={() => navigate("/subjects")}>
+          <div className="action-card__icon">🚀</div>
+          <div className="action-card__label hl" style={{ color: "var(--leaf)" }}>Take Test</div>
+        </div>
+        <div className="card action-card" onClick={() => navigate("/practice/config")}>
+          <div className="action-card__icon">🎯</div>
+          <div className="action-card__label hl" style={{ color: "var(--pen)" }}>Practice MCQ</div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 28, background: "linear-gradient(135deg, var(--card) 0%, var(--pen-soft) 100%)" }}>
+        <div className="card__head">
+          <h2 className="card__title">✨ AI Personalized Mentor</h2>
+          <span className="badge badge--pen">Gemini</span>
+        </div>
+        <div id="ai-review-content" style={{ minHeight: 60, marginBottom: 16 }}>
+          {aiState.html ? (
+            <div dangerouslySetInnerHTML={{ __html: aiState.html }} />
+          ) : (
+            <p style={{ color: "var(--ink-soft)", margin: 0 }}>
+              Get a personalized performance review powered by Google Gemini AI. Analyze your weak spots, negative marking patterns, and confidence gaps.
+            </p>
+          )}
+        </div>
+        <button
+          className="btn btn--primary"
+          onClick={generateAIReview}
+          disabled={aiState.loading}
+        >
+          {aiState.loading ? (
+            <><div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }}></div> Analyzing...</>
+          ) : (
+            "⚡ Analyze My Performance"
+          )}
+        </button>
+      </div>
+
+      <div style={{ textAlign: "center", marginBottom: 24 }}>
+        <div className="tabs">
+          <button
+            className={`tabs__tab ${dashMode === "quiz" ? "tabs__tab--active" : ""}`}
+            onClick={() => switchDashboardMode("quiz")}
+          >
+            Tests Analysis
+          </button>
+          <button
+            className={`tabs__tab ${dashMode === "practice" ? "tabs__tab--active" : ""}`}
+            onClick={() => switchDashboardMode("practice")}
+          >
+            Practice Analysis
+          </button>
+        </div>
+      </div>
+
+      <div className="grid">
+        <div className="card">
+          <div className="card__head">
+            <h2 className="card__title">🎯 Overall Confidence Analysis</h2>
+          </div>
+          <div className="chart-wrap">
+            <canvas id="globalConfidenceChart" ref={confChartRef}></canvas>
+          </div>
+        </div>
+        <div className="card">
+          <div className="card__head">
+            <h2 className="card__title">📈 Accuracy Trend</h2>
+          </div>
+          <div className="chart-wrap">
+            <canvas id="performanceChart" ref={perfChartRef}></canvas>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function BottomStat({ border, label, value, valueClass = "" }) {
+function Stat({ variant, label, value, sub }) {
+  const vClass = variant ? `stat--${variant}` : "";
   return (
-    <div className="col">
-      <div className={`p-3 stat-card rounded shadow-sm border-bottom border-4 ${border} h-100`}>
-        <h6 className="text-muted text-uppercase small fw-bold">{label}</h6>
-        <h2 className={`fw-bold mb-0 ${valueClass}`}>{value}</h2>
-      </div>
+    <div className={`stat ${vClass}`}>
+      <span className="eyebrow">{label}</span>
+      <span className="stat__value">{value}</span>
+      {sub && <span className="stat__sub">{sub}</span>}
     </div>
   );
 }

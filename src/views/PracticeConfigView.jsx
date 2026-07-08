@@ -1,8 +1,3 @@
-/* =========================================
-   PRACTICE CONFIG (ported from practice.js:
-   renderPracticeUI / updatePracticeTopics / handleGeneratePractice)
-   Subject / Topic / limit dropdowns; "All Topics"; same options.
-   ========================================= */
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../store";
@@ -16,145 +11,171 @@ export default function PracticeConfigView() {
   const [allPracticeData, setAllPracticeData] = useState(
     DataManager.cache.practiceManifest || window.allPracticeData || null
   );
-  const [subject, setSubject] = useState("");
-  const [topic, setTopic] = useState("");
-  const [limit, setLimit] = useState(10);
+  const [selectedSubject, setSelectedSubject] = useState("");
+  const [selectedChapter, setSelectedChapter] = useState("all");
+  const [questionLimit, setQuestionLimit] = useState(10);
+  const [loading, setLoading] = useState(!allPracticeData);
 
   useEffect(() => {
     let cancelled = false;
-    async function run() {
+    async function init() {
       if (!allPracticeData) {
         const data = await DataManager.fetchPracticeManifest();
-        if (!cancelled && data) setAllPracticeData(data);
+        if (cancelled) return;
+        if (data) {
+          setAllPracticeData(data);
+          window.allPracticeData = data;
+        } else {
+          toastr.error("Failed to load practice data.");
+        }
+        setLoading(false);
       }
     }
-    run();
+    init();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [allPracticeData]);
 
-  // updatePracticeTopics — reset topic when subject changes
-  const onSubjectChange = (val) => {
-    setSubject(val);
-    setTopic("");
-  };
-
-  // handleGeneratePractice (verbatim validation)
-  const handleGeneratePractice = () => {
-    if (!subject || !topic) {
-      toastr.error("Please select both a Subject and a Topic.");
-      return;
-    }
-    loadPracticeQuiz(subject, topic, parseInt(limit));
-  };
-
-  if (!allPracticeData) {
+  if (loading) {
     return (
-      <section className="py-5" style={{ minHeight: "90vh" }}>
-        <div className="container text-center py-5">
-          <div className="spinner-border text-primary" role="status"></div>
-          <p className="mt-2 text-muted">Loading practice topics...</p>
-        </div>
-      </section>
+      <div className="page empty">
+        <div className="spinner"></div>
+        <p style={{ marginTop: 14 }}>Loading practice modules...</p>
+      </div>
     );
   }
 
-  const chapters = subject ? allPracticeData[subject] || {} : {};
-
-  return (
-    <section className="py-5" style={{ minHeight: "90vh" }}>
-      <div className="container">
-        <button
-          className="btn btn-primary-custom px-4 shadow mb-4"
-          onClick={() => navigate("/dashboard")}
-        >
+  if (!allPracticeData || Object.keys(allPracticeData).length === 0) {
+    return (
+      <div className="page empty">
+        <div className="empty__icon">⚠️</div>
+        <h3>No Practice Data</h3>
+        <p>No practice modules are currently available.</p>
+        <button className="btn btn--ghost" onClick={() => navigate("/dashboard")} style={{ marginTop: 14 }}>
           ← Back to Dashboard
         </button>
-        <div className="text-center mb-5">
-          <h2 className="fw-bold section-title text-primary">Practice MCQ</h2>
-          <div
-            className="title-underline mx-auto"
-            style={{ background: "var(--secondary-color)" }}
-          ></div>
-          <p className="text-muted mt-3">
-            Configure your custom practice session below.
-          </p>
+      </div>
+    );
+  }
+
+  const subjects = Object.keys(allPracticeData);
+  const currentSubjectData =
+    selectedSubject && allPracticeData[selectedSubject]
+      ? allPracticeData[selectedSubject]
+      : {};
+  const chapters = Object.keys(currentSubjectData);
+
+  const handleStart = () => {
+    if (!selectedSubject) {
+      toastr.warning("Please select a subject first.");
+      return;
+    }
+    loadPracticeQuiz(selectedSubject, selectedChapter, questionLimit);
+  };
+
+  return (
+    <div className="page">
+      <div style={{ marginBottom: 24 }}>
+        <button className="btn btn--ghost" onClick={() => navigate("/dashboard")}>
+          ← Back
+        </button>
+      </div>
+
+      <div className="card" style={{ maxWidth: 500, margin: "0 auto" }}>
+        <div className="card__head">
+          <h2 className="card__title">🎯 Practice Configuration</h2>
         </div>
+        <p style={{ color: "var(--ink-soft)", margin: "0 0 20px" }}>
+          Select a subject, specific topics, and the number of questions to practice.
+        </p>
 
-        <div className="row justify-content-center">
-          <div className="col-md-8 col-lg-6">
-            <div className="card border-0 shadow-sm rounded-4 p-4">
-              <div className="mb-3">
-                <label className="form-label fw-bold text-muted small">
-                  1. Select Subject
-                </label>
-                <select
-                  className="form-select form-select-lg"
-                  value={subject}
-                  onChange={(e) => onSubjectChange(e.target.value)}
-                >
-                  <option value="" disabled>
-                    Choose a Subject...
-                  </option>
-                  {Object.keys(allPracticeData).map((subj) => (
-                    <option key={subj} value={subj}>
-                      {subj}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mb-3">
-                <label className="form-label fw-bold text-muted small">
-                  2. Select Topic / Chapter
-                </label>
-                <select
-                  className="form-select form-select-lg"
-                  value={topic}
-                  disabled={!subject}
-                  onChange={(e) => setTopic(e.target.value)}
-                >
-                  <option value="" disabled>
-                    {subject ? "Choose a Topic..." : "Select Subject first..."}
-                  </option>
-                  {subject && <option value="all">All Topics</option>}
-                  {Object.keys(chapters).map((chapId) => (
-                    <option key={chapId} value={chapId}>
-                      {chapId}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mb-4">
-                <label className="form-label fw-bold text-muted small">
-                  3. Number of Questions
-                </label>
-                <select
-                  className="form-select form-select-lg"
-                  value={limit}
-                  onChange={(e) => setLimit(e.target.value)}
-                >
-                  {[10, 20, 30, 40, 50, 75, 100].map((n) => (
-                    <option key={n} value={n}>
-                      {n} Questions
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <button
-                className="btn btn-secondary-custom w-100 py-3 fw-bold fs-5"
-                onClick={handleGeneratePractice}
-              >
-                Generate Practice
-              </button>
-            </div>
+        <div className="grid">
+          <div className="login__field">
+            <label>Subject</label>
+            <select
+              className="form-select"
+              value={selectedSubject}
+              onChange={(e) => {
+                setSelectedSubject(e.target.value);
+                setSelectedChapter("all");
+              }}
+              style={{
+                border: "1.5px solid var(--line)",
+                borderRadius: "var(--radius-sm)",
+                background: "var(--card)",
+                padding: "11px 13px",
+                font: "inherit",
+                width: "100%",
+                color: "var(--ink)"
+              }}
+            >
+              <option value="">-- Select Subject --</option>
+              {subjects.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
           </div>
+
+          <div className="login__field">
+            <label>Topic / Chapter</label>
+            <select
+              className="form-select"
+              value={selectedChapter}
+              onChange={(e) => setSelectedChapter(e.target.value)}
+              disabled={!selectedSubject || chapters.length === 0}
+              style={{
+                border: "1.5px solid var(--line)",
+                borderRadius: "var(--radius-sm)",
+                background: "var(--card)",
+                padding: "11px 13px",
+                font: "inherit",
+                width: "100%",
+                color: "var(--ink)",
+                opacity: (!selectedSubject || chapters.length === 0) ? 0.5 : 1
+              }}
+            >
+              <option value="all">All Topics (Mixed)</option>
+              {chapters.map((cId) => (
+                <option key={cId} value={cId}>{currentSubjectData[cId]}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="login__field">
+            <label>Number of Questions</label>
+            <select
+              className="form-select"
+              value={questionLimit}
+              onChange={(e) => setQuestionLimit(parseInt(e.target.value))}
+              style={{
+                border: "1.5px solid var(--line)",
+                borderRadius: "var(--radius-sm)",
+                background: "var(--card)",
+                padding: "11px 13px",
+                font: "inherit",
+                width: "100%",
+                color: "var(--ink)"
+              }}
+            >
+              <option value={10}>10 Questions</option>
+              <option value={20}>20 Questions</option>
+              <option value={30}>30 Questions</option>
+              <option value={50}>50 Questions</option>
+              <option value={100}>100 Questions</option>
+            </select>
+          </div>
+
+          <button
+            className="btn btn--primary btn--block"
+            onClick={handleStart}
+            disabled={!selectedSubject}
+            style={{ marginTop: 10, padding: "14px 20px" }}
+          >
+            Start Practice Session 🚀
+          </button>
         </div>
       </div>
-    </section>
+    </div>
   );
 }

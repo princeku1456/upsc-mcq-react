@@ -1,12 +1,5 @@
 /* =========================================
-   REVIEW MODE (ported from quiz.js:
-   renderReviewMode / renderReviewQuestions / filterReview /
-   filterReviewBySubject / loadLeaderboard / renderLeaderboardHTML)
-   Every stat calculation, threshold and chart config is unchanged.
-   The imperative innerHTML/DOM code is expressed as React markup;
-   the three charts (subjectSpiderChart, comparisonChart,
-   confidenceChart) are still built with the verbatim Chart.js
-   configs and re-render on theme change.
+   REVIEW MODE (ported from quiz.js)
    ========================================= */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../store";
@@ -35,9 +28,9 @@ export default function ReviewMode({
 }) {
   const { currentUser, theme } = useApp();
 
-  const [reviewStats, setReviewStats] = useState(null); // currentReviewStats
+  const [reviewStats, setReviewStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
-  const [leaderboard, setLeaderboard] = useState(null); // null=loading
+  const [leaderboard, setLeaderboard] = useState(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [subjectFilter, setSubjectFilter] = useState("all");
 
@@ -48,7 +41,6 @@ export default function ReviewMode({
   const comparisonChartInst = useRef(null);
   const confidenceChartInst = useRef(null);
 
-  /* ---- Pre-fetch global stats (verbatim gating on revision_) ---- */
   useEffect(() => {
     let cancelled = false;
     async function run() {
@@ -60,7 +52,6 @@ export default function ReviewMode({
       setReviewStats(stats);
       setStatsLoading(false);
 
-      // loadLeaderboard(currentChapterId)
       if (stats && stats.leaderboard) setLeaderboard(stats.leaderboard);
       else setLeaderboard([]);
     }
@@ -70,9 +61,6 @@ export default function ReviewMode({
     };
   }, [chapterId]);
 
-  /* =========================================
-     Core computation (verbatim from renderReviewMode)
-     ========================================= */
   const computed = useMemo(() => {
     const confStats = {
       100: { total: 0, correct: 0 },
@@ -99,998 +87,555 @@ export default function ReviewMode({
       subjectStats[k] = { total: 0, correct: 0, incorrect: 0, unattempted: 0 };
     });
 
-    quizData.forEach((q, i) => {
-      const uAns = userAnswers[i];
-      const correctIndex = getCorrectIndex(q);
+    const isRevision = chapterId.startsWith("revision_");
 
-      if (q.subject) {
-        const qSubj = q.subject.trim();
-        let matchedSubj = Object.keys(subjectStats).find(
-          (sName) => sName.toLowerCase() === qSubj.toLowerCase()
-        );
-        if (!matchedSubj && subjectStats[qSubj]) matchedSubj = qSubj;
-        if (matchedSubj) {
-          subjectStats[matchedSubj].total++;
-          if (!uAns) subjectStats[matchedSubj].unattempted++;
-          else if (uAns.answer === correctIndex) subjectStats[matchedSubj].correct++;
-          else subjectStats[matchedSubj].incorrect++;
+    quizData.forEach((q, idx) => {
+      const uAns = userAnswers[idx];
+      const cIdx = getCorrectIndex(q);
+
+      let isCorrect = false;
+      let statusStr = "unattempted";
+
+      if (uAns) {
+        if (uAns.surety !== undefined && confStats[uAns.surety]) {
+          confStats[uAns.surety].total++;
+          if (uAns.answer === cIdx) {
+            confStats[uAns.surety].correct++;
+          }
         }
-      }
-
-      const commCorrect = reviewStats?.correctCounts?.[i] || 0;
-      const commTotal = reviewStats?.totalAttempts || 0;
-      const diffInfo = DifficultyHelper.calculate(commCorrect, commTotal);
-      const diffLabel = diffInfo.label;
-
-      difficultyStats[diffLabel].total++;
-      if (!uAns) difficultyStats[diffLabel].unattempted++;
-      else if (uAns.answer === correctIndex) difficultyStats[diffLabel].correct++;
-      else difficultyStats[diffLabel].incorrect++;
-
-      const confidence = uAns?.surety;
-      if (uAns && confidence !== undefined) {
-        confStats[confidence].total++;
-        if (uAns.answer === getCorrectIndex(q)) confStats[confidence].correct++;
-      }
-
-      if (!uAns) {
-        unattempted++;
-      } else if (uAns.answer === correctIndex) {
-        correct++;
-        if (diffLabel === "Hard") hardSuccess++;
+        if (uAns.answer === cIdx) {
+          correct++;
+          isCorrect = true;
+          statusStr = "correct";
+        } else {
+          incorrect++;
+          statusStr = "incorrect";
+        }
       } else {
-        incorrect++;
-        if (diffLabel === "Easy") {
-          sillyMistakes++;
-          missedEasyQNumbers.push(`Q${i + 1}`);
-        }
+        unattempted++;
+      }
+
+      let dLabel = "Unknown";
+      if (!isRevision && reviewStats) {
+        const commCorrect = reviewStats.correctCounts ? reviewStats.correctCounts[idx] : 0;
+        const commTotal = reviewStats.totalAttempts || 0;
+        const dInfo = DifficultyHelper.calculate(commCorrect, commTotal);
+        dLabel = dInfo.label;
+      } else if (isRevision) {
+        dLabel = "Revision";
+      }
+
+      if (difficultyStats[dLabel]) {
+        difficultyStats[dLabel].total++;
+        if (statusStr === "correct") difficultyStats[dLabel].correct++;
+        else if (statusStr === "incorrect") difficultyStats[dLabel].incorrect++;
+        else difficultyStats[dLabel].unattempted++;
+      }
+
+      if (dLabel === "Easy" && (statusStr === "incorrect" || statusStr === "unattempted")) {
+        sillyMistakes++;
+        missedEasyQNumbers.push(idx + 1);
+      }
+      if (dLabel === "Hard" && statusStr === "correct") {
+        hardSuccess++;
+      }
+
+      let qSubj = "Unknown";
+      if (q.tags && q.tags.length > 0) {
+        const subjTag = q.tags.find((t) => t.startsWith("subject:"));
+        if (subjTag) qSubj = subjTag.replace("subject:", "").trim();
+      }
+      if (subjectStats[qSubj]) {
+        subjectStats[qSubj].total++;
+        if (statusStr === "correct") subjectStats[qSubj].correct++;
+        else if (statusStr === "incorrect") subjectStats[qSubj].incorrect++;
+        else subjectStats[qSubj].unattempted++;
       }
     });
 
-    const confChartValues = [
-      confStats[100].total > 0
-        ? ((confStats[100].correct / confStats[100].total) * 100).toFixed(1)
-        : 0,
-      confStats[75].total > 0
-        ? ((confStats[75].correct / confStats[75].total) * 100).toFixed(1)
-        : 0,
-      confStats[50].total > 0
-        ? ((confStats[50].correct / confStats[50].total) * 100).toFixed(1)
-        : 0,
-      confStats[0].total > 0
-        ? ((confStats[0].correct / confStats[0].total) * 100).toFixed(1)
-        : 0,
-    ];
-
-    const totalQuestions = quizData.length;
-    const attempted = correct + incorrect;
-    const score = resultData
-      ? resultData.score
-      : (correct * 2 - incorrect * 0.66).toFixed(2);
-    const totalMarks = totalQuestions * 2;
-    const marksLost = (incorrect * 0.66).toFixed(2);
-    const accuracyRate = ((correct / (correct + incorrect)) * 100 || 0).toFixed(1);
-
-    const hasSubjectStats = Object.values(subjectStats).some((st) => st.total > 0);
+    const finalScore = correct * 2 - incorrect * 0.66;
+    const totalMarks = quizData.length * 2;
 
     return {
       confStats,
-      confChartValues,
       correct,
       incorrect,
       unattempted,
+      finalScore,
+      totalMarks,
       sillyMistakes,
       hardSuccess,
       missedEasyQNumbers,
       difficultyStats,
       subjectStats,
-      totalQuestions,
-      attempted,
-      score,
-      totalMarks,
-      marksLost,
-      accuracyRate,
-      hasSubjectStats,
+      isRevision,
     };
-  }, [quizData, userAnswers, resultData, reviewStats]);
+  }, [quizData, userAnswers, reviewStats, chapterId]);
 
-  /* =========================================
-     Chart: subjectSpiderChart (verbatim config)
-     ========================================= */
   useEffect(() => {
-    if (statsLoading) return;
-    if (!computed.hasSubjectStats || !spiderRef.current) return;
+    if (statsLoading || !reviewStats || computed.isRevision) return;
 
-    const subjectNames = [];
-    const accuracies = [];
-    const correctAttempts = [];
-    const incorrectAttempts = [];
-    const unattemptedQs = [];
+    if (spiderChartInst.current) { spiderChartInst.current.destroy(); spiderChartInst.current = null; }
+    if (comparisonChartInst.current) { comparisonChartInst.current.destroy(); comparisonChartInst.current = null; }
+    if (confidenceChartInst.current) { confidenceChartInst.current.destroy(); confidenceChartInst.current = null; }
 
-    Object.keys(computed.subjectStats).forEach((subject) => {
-      const stats = computed.subjectStats[subject];
-      if (stats.total > 0) {
-        subjectNames.push(subject);
-        const attempted = stats.correct + stats.incorrect;
-        const acc = attempted > 0 ? ((stats.correct / attempted) * 100).toFixed(1) : 0;
-        accuracies.push(acc);
-        correctAttempts.push(stats.correct);
-        incorrectAttempts.push(stats.incorrect);
-        unattemptedQs.push(stats.unattempted);
-      }
-    });
+    const isDark = theme === "dark";
+    const tColor = isDark ? "#e2e8f0" : "#334155";
+    const gColor = isDark ? "#334155" : "#e2e8f0";
 
-    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-    const textColor = isDark ? "#e5e7eb" : "#666";
-    const gridColor = isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)";
+    const radarLabels = [];
+    const radarUserData = [];
+    const radarCommData = [];
 
-    if (spiderChartInst.current) spiderChartInst.current.destroy();
-    spiderChartInst.current = new Chart(spiderRef.current, {
-      type: "bar",
-      data: {
-        labels: subjectNames,
-        datasets: [
-          {
-            type: "line",
-            label: "Accuracy (%)",
-            data: accuracies,
-            borderColor: "rgba(59, 130, 246, 1)",
-            backgroundColor: "rgba(59, 130, 246, 1)",
-            pointBackgroundColor: "rgba(59, 130, 246, 1)",
-            pointBorderColor: "#fff",
-            pointHoverBackgroundColor: "#fff",
-            pointHoverBorderColor: "rgba(59, 130, 246, 1)",
-            borderWidth: 3,
-            pointRadius: 4,
-            pointHoverRadius: 6,
-            fill: false,
-            yAxisID: "y1",
-          },
-          {
-            type: "bar",
-            label: "Correct Qs",
-            data: correctAttempts,
-            backgroundColor: "rgba(16, 185, 129, 0.8)",
-            borderColor: "rgba(16, 185, 129, 1)",
-            borderWidth: 1,
-            yAxisID: "y",
-          },
-          {
-            type: "bar",
-            label: "Incorrect Qs",
-            data: incorrectAttempts,
-            backgroundColor: "rgba(239, 68, 68, 0.8)",
-            borderColor: "rgba(239, 68, 68, 1)",
-            borderWidth: 1,
-            yAxisID: "y",
-          },
-          {
-            type: "bar",
-            label: "Unattempted Qs",
-            data: unattemptedQs,
-            backgroundColor: "rgba(250, 204, 21, 0.8)",
-            borderColor: "rgba(250, 204, 21, 1)",
-            borderWidth: 1,
-            borderRadius: { topLeft: 4, topRight: 4 },
-            yAxisID: "y",
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: "index", intersect: false },
-        scales: {
-          x: {
-            stacked: true,
-            grid: { display: false },
-            ticks: { color: textColor, font: { family: "'Poppins', sans-serif" } },
-          },
-          y: {
-            stacked: true,
-            type: "linear",
-            display: true,
-            position: "left",
-            title: {
-              display: true,
-              text: "Questions Count",
-              color: textColor,
-              font: { size: 10 },
-            },
-            grid: { color: gridColor, drawBorder: false },
-            ticks: { color: textColor, precision: 0 },
-          },
-          y1: {
-            type: "linear",
-            display: true,
-            position: "right",
-            title: {
-              display: true,
-              text: "Accuracy (%)",
-              color: "rgba(59, 130, 246, 1)",
-              font: { size: 10 },
-            },
-            grid: { drawOnChartArea: false },
-            ticks: {
-              color: "rgba(59, 130, 246, 1)",
-              suggestedMin: 0,
-              suggestedMax: 100,
-              stepSize: 20,
-            },
-          },
-        },
-        plugins: {
-          legend: {
-            position: "top",
-            labels: { color: textColor, usePointStyle: true, boxWidth: 8 },
-          },
-          tooltip: {
-            backgroundColor: isDark ? "rgba(30, 41, 59, 0.95)" : "rgba(255, 255, 255, 0.95)",
-            titleColor: isDark ? "#f8fafc" : "#0f172a",
-            bodyColor: isDark ? "#cbd5e1" : "#334155",
-            borderColor: isDark ? "#334155" : "#e2e8f0",
-            borderWidth: 1,
-            padding: 12,
-            boxPadding: 6,
-            usePointStyle: true,
-            callbacks: {
-              label: function (context) {
-                let label = context.dataset.label || "";
-                if (label) label += ": ";
-                if (context.parsed.y !== null) {
-                  label += context.parsed.y;
-                  if (context.datasetIndex === 0) label += "%";
-                }
-                return label;
-              },
-            },
-          },
-        },
-      },
-    });
-
-    return () => {
-      if (spiderChartInst.current) {
-        spiderChartInst.current.destroy();
-        spiderChartInst.current = null;
-      }
-    };
-  }, [statsLoading, computed, theme]);
-
-  /* =========================================
-     Chart: comparisonChart (global comparison, verbatim)
-     ========================================= */
-  const percentile = useMemo(() => {
     const stats = reviewStats;
-    if (!stats) return null;
-    const myScore = resultData ? resultData.scorePercent : 0;
-    let betterThan = 0;
-    for (let i = 0; i < stats.allScores.length; i++) {
-      if (stats.allScores[i] < myScore) betterThan++;
+    SUBJECT_KEYS.forEach((subj) => {
+      if (computed.subjectStats[subj].total > 0) {
+        radarLabels.push(subj);
+        const uSubTotal = computed.subjectStats[subj].total;
+        const uSubCorrect = computed.subjectStats[subj].correct;
+        radarUserData.push((uSubCorrect / uSubTotal) * 100);
+
+        let commSubTotal = 0;
+        let commSubCorrect = 0;
+        quizData.forEach((q, idx) => {
+          let qSubj = "Unknown";
+          if (q.tags && q.tags.length > 0) {
+            const subjTag = q.tags.find((t) => t.startsWith("subject:"));
+            if (subjTag) qSubj = subjTag.replace("subject:", "").trim();
+          }
+          if (qSubj === subj) {
+            commSubTotal += stats.totalAttempts || 0;
+            commSubCorrect += stats.correctCounts ? stats.correctCounts[idx] : 0;
+          }
+        });
+        radarCommData.push(commSubTotal > 0 ? (commSubCorrect / commSubTotal) * 100 : 0);
+      }
+    });
+
+    if (spiderRef.current && radarLabels.length > 0) {
+      spiderChartInst.current = new Chart(spiderRef.current, {
+        type: "radar",
+        data: {
+          labels: radarLabels,
+          datasets: [
+            {
+              label: "Your Accuracy (%)",
+              data: radarUserData,
+              backgroundColor: "rgba(59, 130, 246, 0.2)",
+              borderColor: "#3b82f6",
+              pointBackgroundColor: "#3b82f6",
+              borderWidth: 2,
+            },
+            {
+              label: "Community Accuracy (%)",
+              data: radarCommData,
+              backgroundColor: "rgba(107, 114, 128, 0.2)",
+              borderColor: "#6b7280",
+              pointBackgroundColor: "#6b7280",
+              borderWidth: 2,
+              borderDash: [5, 5],
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            r: {
+              angleLines: { color: gColor },
+              grid: { color: gColor },
+              pointLabels: { color: tColor, font: { size: 12 } },
+              ticks: { display: false, min: 0, max: 100 },
+            },
+          },
+          plugins: { legend: { labels: { color: tColor } } },
+        },
+      });
     }
-    return stats.totalAttempts > 0
-      ? ((betterThan / stats.totalAttempts) * 100).toFixed(0)
-      : 0;
-  }, [reviewStats, resultData]);
 
-  useEffect(() => {
-    if (statsLoading || !reviewStats || !comparisonRef.current) return;
-    const stats = reviewStats;
-    const myScore = resultData ? resultData.scorePercent : 0;
-    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-    const textColor = isDark ? "#e5e7eb" : "#666";
+    const { confStats } = computed;
+    const confLabels = ["100% (Sure)", "75% (Likely)", "50% (Maybe)", "0% (Guess)"];
+    const confAccData = [];
+    const confCounts = [
+      confStats[100].total,
+      confStats[75].total,
+      confStats[50].total,
+      confStats[0].total,
+    ];
 
-    if (comparisonChartInst.current) comparisonChartInst.current.destroy();
-    comparisonChartInst.current = new Chart(comparisonRef.current, {
-      type: "bar",
-      data: {
-        labels: ["Global Avg", "Your Score", "Topper"],
-        datasets: [
-          {
-            label: "Score (%)",
-            data: [stats.avg.toFixed(1), myScore.toFixed(1), stats.highest.toFixed(1)],
-            backgroundColor: [
-              "rgba(108, 117, 125, 0.5)",
-              "rgba(59, 130, 246, 0.8)",
-              "rgba(245, 158, 11, 0.8)",
-            ],
-            borderColor: [
-              "rgba(108, 117, 125, 1)",
-              "rgba(30, 58, 138, 1)",
-              "rgba(245, 158, 11, 1)",
-            ],
-            borderWidth: 1,
-            borderRadius: 5,
-          },
-        ],
-      },
-      options: {
-        indexAxis: "y",
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: {
-            beginAtZero: true,
-            max: 100,
-            grid: { display: false },
-            ticks: { color: textColor },
-          },
-          y: { grid: { display: false }, ticks: { color: textColor } },
-        },
-      },
+    [100, 75, 50, 0].forEach((level) => {
+      const { total, correct } = confStats[level];
+      confAccData.push(total > 0 ? (correct / total) * 100 : 0);
     });
 
-    return () => {
-      if (comparisonChartInst.current) {
-        comparisonChartInst.current.destroy();
-        comparisonChartInst.current = null;
-      }
-    };
-  }, [statsLoading, reviewStats, resultData, theme]);
+    if (confidenceRef.current) {
+      confidenceChartInst.current = new Chart(confidenceRef.current, {
+        type: "bar",
+        data: {
+          labels: confLabels,
+          datasets: [
+            {
+              label: "Accuracy (%)",
+              data: confAccData,
+              backgroundColor: "#10b981",
+              borderRadius: 4,
+              yAxisID: "y",
+            },
+            {
+              label: "Questions Attempted",
+              data: confCounts,
+              type: "line",
+              borderColor: "#f59e0b",
+              backgroundColor: "#f59e0b",
+              borderWidth: 2,
+              pointRadius: 4,
+              yAxisID: "y1",
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { grid: { color: gColor }, ticks: { color: tColor } },
+            y: {
+              type: "linear",
+              position: "left",
+              min: 0,
+              max: 100,
+              grid: { color: gColor },
+              ticks: { color: tColor },
+              title: { display: true, text: "Accuracy (%)", color: tColor },
+            },
+            y1: {
+              type: "linear",
+              position: "right",
+              min: 0,
+              grid: { drawOnChartArea: false },
+              ticks: { color: tColor, precision: 0 },
+              title: { display: true, text: "Questions", color: tColor },
+            },
+          },
+          plugins: { legend: { labels: { color: tColor } } },
+        },
+      });
+    }
 
-  /* =========================================
-     Chart: confidenceChart (verbatim ChartHelper call)
-     ========================================= */
-  useEffect(() => {
-    if (statsLoading || !confidenceRef.current) return;
-    if (confidenceChartInst.current) confidenceChartInst.current.destroy();
-    confidenceChartInst.current = ChartHelper.renderConfidenceChart(
-      confidenceRef.current,
-      computed.confChartValues,
-      computed.confStats
-    );
-    return () => {
-      if (confidenceChartInst.current) {
-        confidenceChartInst.current.destroy();
-        confidenceChartInst.current = null;
-      }
-    };
-  }, [statsLoading, computed, theme]);
+    const userP = (computed.finalScore / computed.totalMarks) * 100;
+    const commAvgP = (stats.totalScore || 0) / (stats.totalAttempts || 1);
+    const commHighP = stats.highestScore || 0;
 
-  /* =========================================
-     RENDER
-     ========================================= */
-  const {
-    correct,
-    incorrect,
-    unattempted,
-    sillyMistakes,
-    hardSuccess,
-    missedEasyQNumbers,
-    difficultyStats,
-    subjectStats,
-    totalQuestions,
-    attempted,
-    score,
-    totalMarks,
-    marksLost,
-    accuracyRate,
-    hasSubjectStats,
-  } = computed;
+    if (comparisonRef.current) {
+      comparisonChartInst.current = new Chart(comparisonRef.current, {
+        type: "bar",
+        data: {
+          labels: ["You", "Community Avg", "Highest Score"],
+          datasets: [
+            {
+              label: "Score (%)",
+              data: [userP, commAvgP, commHighP],
+              backgroundColor: ["#3b82f6", "#6b7280", "#f59e0b"],
+              borderRadius: 4,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { grid: { display: false }, ticks: { color: tColor } },
+            y: { min: 0, max: 100, grid: { color: gColor }, ticks: { color: tColor } },
+          },
+          plugins: { legend: { display: false } },
+        },
+      });
+    }
+
+    return () => {
+      if (spiderChartInst.current) spiderChartInst.current.destroy();
+      if (comparisonChartInst.current) comparisonChartInst.current.destroy();
+      if (confidenceChartInst.current) confidenceChartInst.current.destroy();
+    };
+  }, [statsLoading, reviewStats, computed, theme, quizData]);
+
+  const uniqueSubjects = useMemo(() => {
+    const s = new Set();
+    quizData.forEach((q) => {
+      if (q.tags) {
+        const t = q.tags.find((tag) => tag.startsWith("subject:"));
+        if (t) s.add(t.replace("subject:", "").trim());
+      }
+    });
+    return Array.from(s).sort();
+  }, [quizData]);
 
   return (
-    <div id="quiz-content">
-      {/* Header + filters */}
-      <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 border-bottom pb-3">
-        <div>
-          <h4 className="fw-bold text-primary m-0">{chapterName}</h4>
-          <span className="badge bg-secondary">Performance Review</span>
-        </div>
-        <div className="d-flex align-items-center gap-2 flex-wrap">
-          {hasSubjectStats && (
-            <select
-              className="form-select w-auto shadow-sm"
-              value={subjectFilter}
-              onChange={(e) => setSubjectFilter(e.target.value)}
-            >
-              <option value="all">All Subjects</option>
-              {Object.keys(subjectStats).map((subject) =>
-                subjectStats[subject].total > 0 ? (
-                  <option key={subject} value={subject}>
-                    {subject}
-                  </option>
-                ) : null
-              )}
-            </select>
-          )}
-          <div className="btn-group shadow-sm" role="group">
-            <button
-              className={`btn btn-outline-primary ${statusFilter === "all" ? "active" : ""}`}
-              onClick={() => setStatusFilter("all")}
-            >
-              All
-            </button>
-            <button
-              className={`btn btn-outline-success ${statusFilter === "correct" ? "active" : ""}`}
-              onClick={() => setStatusFilter("correct")}
-            >
-              Correct
-            </button>
-            <button
-              className={`btn btn-outline-danger ${statusFilter === "incorrect" ? "active" : ""}`}
-              onClick={() => setStatusFilter("incorrect")}
-            >
-              Incorrect
-            </button>
-            <button
-              className={`btn btn-outline-secondary ${
-                statusFilter === "unattempted" ? "active" : ""
-              }`}
-              onClick={() => setStatusFilter("unattempted")}
-            >
-              Unattempted
-            </button>
-          </div>
-        </div>
+    <div className="review">
+      <div className="dash__hero">
+        <h1>{chapterName}</h1>
+        <p>Review your test performance and analytics.</p>
       </div>
 
-      {/* UPSC Prep Index */}
-      <div className="card mb-4 border-0 shadow-sm">
-        <div className="card-body">
-          <h5 className="fw-bold card-title mb-3">📊 UPSC Prep Index</h5>
+      <div className="stats-grid" style={{ marginBottom: 28 }}>
+        <Stat
+          variant={computed.finalScore >= 0 ? "leaf" : "stamp"}
+          label="Score"
+          value={`${computed.finalScore.toFixed(1)} / ${computed.totalMarks}`}
+        />
+        <Stat variant="leaf" label="Correct" value={computed.correct} />
+        <Stat variant="stamp" label="Incorrect" value={computed.incorrect} />
+        <Stat label="Unattempted" value={computed.unattempted} />
+      </div>
 
-          <div className="row g-3 text-center mb-4">
-            <div className="col-6 col-md-3">
-              <div className="p-3 bg-white rounded shadow-sm border-start border-4 border-primary">
-                <h6 className="text-uppercase text-muted small fw-bold mb-1">Accuracy</h6>
-                <h3 className="fw-bold text-dark m-0">{accuracyRate}%</h3>
-                <small className="text-muted">on attempted</small>
-              </div>
+      {!computed.isRevision && !statsLoading && reviewStats && (
+        <>
+          <div className="grid">
+            <div className="card">
+              <div className="card__head"><h2 className="card__title">🎯 Subject Analysis</h2></div>
+              <div className="chart-wrap"><canvas ref={spiderRef}></canvas></div>
             </div>
-            <div className="col-6 col-md-3">
-              <div className="p-3 bg-white rounded shadow-sm border-start border-4 border-danger">
-                <h6 className="text-uppercase text-muted small fw-bold mb-1">Negative Loss</h6>
-                <h3 className="fw-bold text-danger m-0">-{marksLost}</h3>
-                <small className="text-muted">marks lost</small>
-              </div>
+            <div className="card">
+              <div className="card__head"><h2 className="card__title">📊 Comparison</h2></div>
+              <div className="chart-wrap"><canvas ref={comparisonRef}></canvas></div>
             </div>
-            <div className="col-6 col-md-3">
-              <div className="p-3 bg-white rounded shadow-sm border-start border-4 border-warning">
-                <h6 className="text-uppercase text-muted small fw-bold mb-1">Concept Gaps</h6>
-                <h3 className="fw-bold text-warning m-0">{sillyMistakes}</h3>
-                <small className="text-muted d-block">
-                  {missedEasyQNumbers.length > 0 ? (
-                    <>
-                      Easy Qs Missed --{" "}
-                      <span className="text-danger fw-bold">
-                        &quot;{missedEasyQNumbers.join(", ")}&quot;
-                      </span>
-                    </>
-                  ) : (
-                    "No Easy Qs Missed"
+            <div className="card">
+              <div className="card__head"><h2 className="card__title">🧠 Confidence vs Accuracy</h2></div>
+              <div className="chart-wrap"><canvas ref={confidenceRef}></canvas></div>
+            </div>
+          </div>
+
+          <div className="stats-grid" style={{ marginTop: 28, marginBottom: 28 }}>
+            <Stat
+              variant="stamp"
+              label="Silly Mistakes"
+              value={computed.sillyMistakes}
+              sub="Easy questions missed"
+            />
+            <Stat
+              variant="leaf"
+              label="Hard Successes"
+              value={computed.hardSuccess}
+              sub="Hard questions correct"
+            />
+          </div>
+        </>
+      )}
+
+      {computed.isRevision && (
+        <div className="card" style={{ marginBottom: 28, background: "var(--pen-soft)" }}>
+          <p style={{ margin: 0, fontWeight: 500, color: "var(--pen)" }}>
+            📈 <strong>Revision Test:</strong> Advanced charts are hidden for revision tests.
+          </p>
+        </div>
+      )}
+
+      <div className="review-grid">
+        <div className="card">
+          <div className="card__head">
+            <h2 className="card__title">Questions Review</h2>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <span className="eyebrow" style={{ display: "block", marginBottom: 8 }}>Filter by Status</span>
+            <div className="tabs">
+              {[
+                { id: "all", label: "All" },
+                { id: "correct", label: "Correct" },
+                { id: "incorrect", label: "Incorrect" },
+                { id: "unattempted", label: "Unattempted" },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  className={`tabs__tab ${statusFilter === t.id ? "tabs__tab--active" : ""}`}
+                  onClick={() => setStatusFilter(t.id)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 24 }}>
+            <span className="eyebrow" style={{ display: "block", marginBottom: 8 }}>Filter by Subject</span>
+            <select
+              className="form-select"
+              value={subjectFilter}
+              onChange={(e) => setSubjectFilter(e.target.value)}
+              style={{
+                border: "1.5px solid var(--line)",
+                borderRadius: "var(--radius-sm)",
+                background: "var(--card)",
+                padding: "8px 12px",
+                font: "inherit",
+                width: "100%",
+                maxWidth: 240,
+                color: "var(--ink)"
+              }}
+            >
+              <option value="all">All Subjects</option>
+              {uniqueSubjects.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            {quizData.map((q, idx) => {
+              const uAns = userAnswers[idx];
+              const cIdx = getCorrectIndex(q);
+              
+              let statusStr = "unattempted";
+              if (uAns) {
+                statusStr = uAns.answer === cIdx ? "correct" : "incorrect";
+              }
+
+              if (statusFilter !== "all" && statusStr !== statusFilter) return null;
+
+              if (subjectFilter !== "all") {
+                const hasTag = q.tags && q.tags.includes(`subject:${subjectFilter}`);
+                if (!hasTag) return null;
+              }
+
+              let diffHtml = null;
+              if (!computed.isRevision && reviewStats) {
+                const commCorrect = reviewStats.correctCounts ? reviewStats.correctCounts[idx] : 0;
+                const commTotal = reviewStats.totalAttempts || 0;
+                const dInfo = DifficultyHelper.calculate(commCorrect, commTotal);
+                
+                let bClass = "badge--pen";
+                if (dInfo.label === "Easy") bClass = "badge--leaf";
+                if (dInfo.label === "Hard") bClass = "badge--stamp";
+
+                diffHtml = (
+                  <span className={`badge ${bClass}`}>
+                    {dInfo.label} (Comm: {dInfo.percent}%)
+                  </span>
+                );
+              }
+
+              const timeSpent = questionTimeSpent && questionTimeSpent[idx] !== undefined
+                ? questionTimeSpent[idx]
+                : null;
+              const timeStr = timeSpent !== null ? `${Math.floor(timeSpent / 60)}m ${timeSpent % 60}s` : "N/A";
+
+              let statusBadge = null;
+              if (statusStr === "correct") statusBadge = <span className="badge badge--leaf">✓ Correct</span>;
+              else if (statusStr === "incorrect") statusBadge = <span className="badge badge--stamp">✗ Incorrect</span>;
+              else statusBadge = <span className="badge">⚪ Unattempted</span>;
+
+              return (
+                <div key={idx} className="review-q">
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" }}>
+                    <span className="eyebrow" style={{ color: "var(--ink)", fontWeight: 700, fontSize: 13 }}>Q{idx + 1}</span>
+                    {statusBadge}
+                    {diffHtml}
+                    {uAns && uAns.surety !== undefined && (
+                      <span className="badge badge--marker">Conf: {uAns.surety}%</span>
+                    )}
+                    <span className="badge">⏱ {timeStr}</span>
+                  </div>
+
+                  <div style={{ fontSize: 16, marginBottom: 16, lineHeight: 1.6 }}>
+                    <span dangerouslySetInnerHTML={{ __html: TextFormatter.formatQuestionText(q.text) }} />
+                  </div>
+
+                  <div className="grid" style={{ marginBottom: 16 }}>
+                    {q.options.map((opt, oIdx) => {
+                      const isCorrect = oIdx === cIdx;
+                      const isSelected = uAns && uAns.answer === oIdx;
+                      
+                      let optCls = "option";
+                      let omrCls = "omr";
+                      
+                      if (isCorrect) {
+                        optCls += " option--correct";
+                        omrCls += " omr--correct";
+                      } else if (isSelected && !isCorrect) {
+                        optCls += " option--wrong";
+                        omrCls += " omr--wrong";
+                      }
+
+                      return (
+                        <div key={oIdx} className={optCls} style={{ cursor: "default", pointerEvents: "none" }}>
+                          <div className={omrCls}>{["A", "B", "C", "D"][oIdx]}</div>
+                          <div className="option__text" dangerouslySetInnerHTML={{ __html: opt }} />
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {q.explanation && (
+                    <div className="explanation">
+                      <strong style={{ display: "block", marginBottom: 4 }}>💡 Explanation:</strong>
+                      <span dangerouslySetInnerHTML={{ __html: q.explanation }} />
+                    </div>
                   )}
-                </small>
-              </div>
-            </div>
-            <div className="col-6 col-md-3">
-              <div className="p-3 bg-primary text-white rounded shadow-sm">
-                <h6 className="text-white-50 text-uppercase small fw-bold mb-1">Final Score</h6>
-                <h3 className="fw-bold m-0">
-                  {score} <span className="fs-6 text-white-50">/ {totalMarks}</span>
-                </h3>
-              </div>
-            </div>
+                </div>
+              );
+            })}
           </div>
+        </div>
 
-          <div className="row g-2 mb-4 text-center">
-            <div className="col-4 col-md">
-              <div className="p-2 border rounded bg-light">
-                <small className="text-muted d-block small fw-bold">TOTAL Qs</small>
-                <span className="fw-bold">{totalQuestions}</span>
+        <div className="sidebar">
+          <div className="card" style={{ padding: "16px 14px" }}>
+            <div className="card__head">
+              <h2 className="card__title">🏆 Leaderboard</h2>
+            </div>
+            
+            {leaderboard === null ? (
+              <div className="empty">
+                <div className="spinner"></div>
               </div>
-            </div>
-            <div className="col-4 col-md">
-              <div className="p-2 border rounded bg-light">
-                <small className="text-muted d-block small fw-bold">ATTEMPTED</small>
-                <span className="fw-bold text-primary">{attempted}</span>
-              </div>
-            </div>
-            <div className="col-4 col-md">
-              <div className="p-2 border rounded bg-light">
-                <small className="text-muted d-block small fw-bold">UNATTEMPTED</small>
-                <span className="fw-bold text-secondary">{unattempted}</span>
-              </div>
-            </div>
-            <div className="col-6 col-md">
-              <div className="p-2 border rounded bg-light border-success-subtle">
-                <small className="text-success d-block small fw-bold">CORRECT</small>
-                <span className="fw-bold text-success">{correct}</span>
-              </div>
-            </div>
-            <div className="col-6 col-md">
-              <div className="p-2 border rounded bg-light border-danger-subtle">
-                <small className="text-danger d-block small fw-bold">INCORRECT</small>
-                <span className="fw-bold text-danger">{incorrect}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Difficulty Matrix */}
-          <div className="card mb-4 border-0 shadow-sm">
-            <div className="card-header bg-white border-bottom py-2">
-              <h6 className="fw-bold text-primary m-0">🎯 Performance by Difficulty</h6>
-            </div>
-            <div className="table-responsive">
-              <table className="table table-hover mb-0 align-middle">
-                <thead className="table-light small text-muted">
-                  <tr>
-                    <th>Difficulty</th>
-                    <th className="text-center">Total</th>
-                    <th className="text-center">Correct</th>
-                    <th className="text-center">Incorrect</th>
-                    <th className="text-center">Unattempted</th>
-                    <th className="text-end">Accuracy</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {["Easy", "Medium", "Hard"].map((level) => {
-                    const stats = difficultyStats[level];
-                    const att = stats.correct + stats.incorrect;
-                    const acc = att > 0 ? ((stats.correct / att) * 100).toFixed(1) : 0;
-                    let badgeClass = "bg-secondary";
-                    if (level === "Easy") badgeClass = "bg-success";
-                    if (level === "Medium") badgeClass = "bg-warning text-dark";
-                    if (level === "Hard") badgeClass = "bg-danger";
-                    return (
-                      <tr key={level}>
-                        <td>
-                          <span className={`badge ${badgeClass}`}>{level}</span>
-                        </td>
-                        <td className="text-center">{stats.total}</td>
-                        <td className="text-center text-success fw-bold">{stats.correct}</td>
-                        <td className="text-center text-danger fw-bold">{stats.incorrect}</td>
-                        <td className="text-center text-muted">{stats.unattempted}</td>
-                        <td className="text-end fw-bold">{acc}%</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Subject Matrix + Spider Chart */}
-          {hasSubjectStats && (
-            <div className="card mb-4 border-0 shadow-sm">
-              <div className="card-header bg-white border-bottom py-2">
-                <h6 className="fw-bold text-primary m-0">📚 Subject-wise Performance</h6>
-              </div>
-              <div className="table-responsive">
-                <table className="table table-hover mb-0 align-middle">
-                  <thead className="table-light small text-muted">
+            ) : leaderboard.length === 0 ? (
+              <p style={{ color: "var(--ink-soft)", fontSize: 13, margin: 0 }}>
+                No records yet. Be the first!
+              </p>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table className="leaderboard-table">
+                  <thead>
                     <tr>
-                      <th>Subject</th>
-                      <th className="text-center">Total</th>
-                      <th className="text-center">Correct</th>
-                      <th className="text-center">Incorrect</th>
-                      <th className="text-center">Unattempted</th>
-                      <th className="text-end">Accuracy</th>
+                      <th>Rank</th>
+                      <th>User</th>
+                      <th style={{ textAlign: "right" }}>Score</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {Object.keys(subjectStats).map((subject) => {
-                      const stats = subjectStats[subject];
-                      if (stats.total === 0) return null;
-                      const att = stats.correct + stats.incorrect;
-                      const acc = att > 0 ? ((stats.correct / att) * 100).toFixed(1) : 0;
+                    {leaderboard.map((entry, idx) => {
+                      const isMe = currentUser && currentUser.email === entry.userEmail;
                       return (
-                        <tr key={subject}>
-                          <td>
-                            <span className="badge bg-secondary">{subject}</span>
+                        <tr key={idx} className={isMe ? "highlight" : ""}>
+                          <td style={{ fontWeight: 700 }}>
+                            {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx + 1}`}
                           </td>
-                          <td className="text-center">{stats.total}</td>
-                          <td className="text-center text-success fw-bold">{stats.correct}</td>
-                          <td className="text-center text-danger fw-bold">{stats.incorrect}</td>
-                          <td className="text-center text-muted">{stats.unattempted}</td>
-                          <td className="text-end fw-bold">{acc}%</td>
+                          <td>
+                            {entry.userEmail ? entry.userEmail.split("@")[0] : "guest"}
+                            {isMe && " (You)"}
+                          </td>
+                          <td style={{ textAlign: "right", fontWeight: 600 }}>
+                            {entry.scorePercent}%
+                          </td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
               </div>
-              <div
-                className="card-body border-top text-center"
-                style={{ maxHeight: "400px", display: "flex", justifyContent: "center" }}
-              >
-                <canvas
-                  ref={spiderRef}
-                  style={{ maxHeight: "350px", width: "100%", maxWidth: "500px" }}
-                ></canvas>
-              </div>
-            </div>
-          )}
-
-          {/* Strategy insight / Competitive edge */}
-          <div className="row mb-4 g-3">
-            <div className="col-md-6">
-              <div className="alert alert-info border-0 shadow-sm h-100">
-                <h6 className="fw-bold">
-                  <i className="fas fa-lightbulb me-2"></i>Strategy Insight
-                </h6>
-                <p className="small mb-0">
-                  {accuracyRate < 70
-                    ? "Your accuracy is below threshold. Focus on elimination techniques."
-                    : "Good precision. You are making calculated attempts."}{" "}
-                  {sillyMistakes > 2 ? (
-                    <>
-                      You missed <strong>{sillyMistakes} basic questions</strong> that 65% of
-                      students got right. Tighten your fundamentals.
-                    </>
-                  ) : (
-                    "You handled the 'easy' questions with professional precision."
-                  )}
-                </p>
-              </div>
-            </div>
-            <div className="col-md-6">
-              <div className="alert alert-success border-0 shadow-sm h-100">
-                <h6 className="fw-bold">
-                  <i className="fas fa-trophy me-2"></i>Competitive Edge
-                </h6>
-                <p className="small mb-0">
-                  You solved <strong>{hardSuccess} high-difficulty</strong> questions where the
-                  community struggled. This indicates depth in complex topics.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Leaderboard */}
-          <div className="mb-4">
-            {leaderboard === null ? (
-              <div className="text-center py-3">
-                <span className="spinner-border spinner-border-sm text-primary"></span> Loading
-                Leaderboard...
-              </div>
-            ) : (
-              <LeaderboardTable data={leaderboard} currentUser={currentUser} />
             )}
-          </div>
-
-          {/* Global comparison */}
-          <div className="row align-items-center pt-3 border-top">
-            {statsLoading ? (
-              <div className="col-12 text-center py-3">
-                <div className="spinner-border text-primary" role="status"></div>
-                <p className="text-muted small mt-2">Comparing with other students...</p>
-              </div>
-            ) : !reviewStats ? (
-              <div className="col-12 text-center text-muted">
-                Not enough data for global comparison yet.
-              </div>
-            ) : (
-              <>
-                <div className="col-md-4 mb-3 mb-md-0 text-center">
-                  <h6 className="text-uppercase text-muted small fw-bold">Your Rank</h6>
-                  <h2 className="fw-bold text-primary">Top {100 - percentile}%</h2>
-                  <p className="small text-muted">Better than {percentile}% of users</p>
-                </div>
-                <div className="col-md-8">
-                  <div style={{ height: "200px", width: "100%" }}>
-                    <canvas ref={comparisonRef}></canvas>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Confidence chart */}
-          <div className="mb-5 mt-5 p-3 rounded border bg-white">
-            <h6 className="fw-bold text-secondary mb-3">
-              <i className="bi bi-graph-up-arrow me-2"></i>Confidence vs Accuracy Analysis
-            </h6>
-            <div style={{ height: "250px", width: "100%" }}>
-              <canvas ref={confidenceRef}></canvas>
-            </div>
-            <p className="small text-muted mt-2 text-center">
-              Correct attempts as a % of each confidence level.
-            </p>
           </div>
         </div>
-      </div>
-
-      {/* Question cards */}
-      <ReviewQuestions
-        quizData={quizData}
-        userAnswers={userAnswers}
-        questionTimeSpent={questionTimeSpent}
-        reviewStats={reviewStats}
-        statusFilter={statusFilter}
-        subjectFilter={subjectFilter}
-      />
-
-      <div className="text-center mt-5">
-        <button className="btn btn-primary-custom px-5 shadow py-2" onClick={onExit}>
-          ← Back
-        </button>
       </div>
     </div>
   );
 }
 
-/* ---------- Leaderboard (renderLeaderboardHTML port) ---------- */
-function LeaderboardTable({ data, currentUser }) {
-  if (!data || data.length === 0) {
-    return (
-      <div className="alert alert-light border text-center text-muted small">
-        No other attempts yet. Be the first!
-      </div>
-    );
-  }
-
-  const uniqueUsers = {};
-  data.forEach((entry) => {
-    const email = entry.userEmail || "Guest";
-    if (!uniqueUsers[email] || entry.scorePercent > uniqueUsers[email].scorePercent) {
-      uniqueUsers[email] = entry;
-    }
-  });
-  const filteredSortedData = Object.values(uniqueUsers).sort(
-    (a, b) => b.scorePercent - a.scorePercent
-  );
-
-  let rank = 1;
+function Stat({ variant, label, value, sub }) {
+  const vClass = variant ? `stat--${variant}` : "";
   return (
-    <div className="card border-0 shadow-sm overflow-hidden mt-3">
-      <div className="card-header bg-white border-bottom py-2">
-        <div className="d-flex justify-content-between align-items-center">
-          <h6 className="fw-bold text-primary m-0">🏆 Leaderboard</h6>
-          <small className="text-muted">Top Students</small>
-        </div>
-      </div>
-      <div className="table-responsive">
-        <table className="table table-hover mb-0 align-middle" style={{ fontSize: "0.9rem" }}>
-          <tbody className="bg-white">
-            {filteredSortedData.map((entry, idx) => {
-              const email = entry.userEmail || "Guest";
-              const rawName = email.split("@")[0];
-              const displayName =
-                rawName.length > 3 ? rawName.substring(0, 3) + "***" : rawName;
-              const isMe = currentUser && entry.userEmail === currentUser.email;
-              const currentRank = rank++;
-              return (
-                <tr key={idx} className={isMe ? "table-warning fw-bold" : ""}>
-                  <td className="ps-3 text-secondary">#{currentRank}</td>
-                  <td>
-                    <div className="d-flex align-items-center">
-                      <div
-                        className="rounded-circle bg-secondary text-white d-flex justify-content-center align-items-center me-2 shadow-sm"
-                        style={{ width: "24px", height: "24px", fontSize: "10px" }}
-                      >
-                        {rawName.charAt(0).toUpperCase()}
-                      </div>
-                      <span className="text-dark">{displayName}</span>
-                      {isMe && (
-                        <span
-                          className="badge bg-warning text-dark dummy-tag ms-2"
-                          style={{ fontSize: "0.6rem" }}
-                        >
-                          YOU
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="text-end pe-3">
-                    <span
-                      className={`badge ${
-                        entry.scorePercent >= 80 ? "bg-success" : "bg-primary"
-                      }`}
-                    >
-                      {entry.scorePercent}%
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Review question cards (renderReviewQuestions port) ---------- */
-function ReviewQuestions({
-  quizData,
-  userAnswers,
-  questionTimeSpent,
-  reviewStats,
-  statusFilter,
-  subjectFilter,
-}) {
-  const cards = quizData.map((question, index) => {
-    const correctIndex = getCorrectIndex(question);
-    const uAns = userAnswers[index];
-    const userSurety = uAns?.surety !== undefined ? uAns.surety : "N/A";
-
-    let status = "unattempted";
-    if (uAns) status = uAns.answer === correctIndex ? "correct" : "incorrect";
-
-    let borderClass = "";
-    let suretyClass = "surety-0";
-    if (userSurety === 100) suretyClass = "surety-100";
-    else if (userSurety === 75) suretyClass = "surety-75";
-    else if (userSurety === 50) suretyClass = "surety-50";
-
-    let badge = null;
-    if (status === "correct") {
-      badge = <span className="badge bg-success mb-2">Correct</span>;
-      borderClass = "border-success";
-    } else if (status === "incorrect") {
-      badge = <span className="badge bg-danger mb-2">Incorrect</span>;
-      borderClass = "border-danger";
-    } else {
-      badge = <span className="badge bg-secondary mb-2">Unattempted</span>;
-      borderClass = "border-secondary";
-    }
-
-    const commTotal = reviewStats?.totalAttempts || 0;
-    const commCorrect = reviewStats?.correctCounts?.[index] || 0;
-    const diffInfo = DifficultyHelper.calculate(commCorrect, commTotal);
-
-    let statsBlock = null;
-    if (reviewStats && reviewStats.totalAttempts > 0) {
-      const total = reviewStats.totalAttempts;
-      const correctCount = commCorrect;
-      const attemptedCount =
-        (reviewStats.attemptedCounts && reviewStats.attemptedCounts[index]) || 0;
-      const pCorrect = Math.round((correctCount / total) * 100);
-      const pIncorrect = Math.round(((attemptedCount - correctCount) / total) * 100);
-      const pUnattempted = 100 - pCorrect - pIncorrect;
-
-      statsBlock = (
-        <div className="mt-2 mb-4 p-3 bg-light bg-opacity-75 rounded-3 border">
-          <div className="d-flex justify-content-between align-items-center mb-2">
-            <span
-              className="small fw-bold text-uppercase text-secondary"
-              style={{ letterSpacing: "0.5px" }}
-            >
-              👥 Community Stats
-            </span>
-            <span className="fw-bold" style={{ color: "#4338ca" }}>
-              {pCorrect}% Correct
-            </span>
-          </div>
-          <div
-            className="progress shadow-sm"
-            style={{
-              height: "40px",
-              backgroundColor: "#e2e8f0",
-              borderRadius: "8px",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              className="progress-bar stats-bar-correct d-flex align-items-center justify-content-center"
-              role="progressbar"
-              style={{ width: `${pCorrect}%` }}
-            >
-              <span className="progress-bar-text">{pCorrect > 12 ? pCorrect + "%" : ""}</span>
-            </div>
-            <div
-              className="progress-bar stats-bar-incorrect d-flex align-items-center justify-content-center"
-              role="progressbar"
-              style={{ width: `${pIncorrect}%` }}
-            >
-              <span className="progress-bar-text">
-                {pIncorrect > 12 ? pIncorrect + "%" : ""}
-              </span>
-            </div>
-            <div
-              className="progress-bar stats-bar-left d-flex align-items-center justify-content-center"
-              role="progressbar"
-              style={{ width: `${pUnattempted}%` }}
-            >
-              <span className="progress-bar-text">
-                {pUnattempted > 12 ? pUnattempted + "%" : ""}
-              </span>
-            </div>
-          </div>
-          <div className="d-flex justify-content-between align-items-center mb-2 mt-2">
-            <span className="fw-bold" style={{ color: "#4338ca" }}>
-              Total test taken by: {total}
-            </span>
-          </div>
-        </div>
-      );
-    }
-
-    const timeSec =
-      questionTimeSpent && questionTimeSpent[index]
-        ? Math.round(questionTimeSpent[index])
-        : 0;
-    const timeLabel =
-      timeSec < 60 ? `${timeSec}s` : `${Math.floor(timeSec / 60)}m ${timeSec % 60}s`;
-
-    // Visibility (verbatim matchStatus/matchSubject)
-    const cardSubject = question.subject || "";
-    const matchStatus = statusFilter === "all" || status === statusFilter;
-    const matchSubject = subjectFilter === "all" || cardSubject === subjectFilter;
-    const hidden = !(matchStatus && matchSubject);
-
-    return (
-      <div
-        key={index}
-        className={`card mb-4 shadow-sm border-0 border-start border-5 ${borderClass} question-card ${
-          hidden ? "d-none" : ""
-        }`}
-      >
-        <div className="card-body p-4">
-          <div className="d-flex justify-content-between align-items-center mb-3">
-            <div className="d-flex align-items-center flex-wrap gap-2">
-              <h6 className="text-muted fw-bold m-0 me-2">Question {index + 1}</h6>
-              <span className={`surety-badge ${suretyClass}`}>Confidence: {userSurety}%</span>
-              <span className="badge bg-light text-dark border ms-2">⏱ {timeLabel}</span>
-              <span className={`badge bg-${diffInfo.color} mb-2 ms-2`}>{diffInfo.label}</span>
-              {question.subject && (
-                <span className="badge bg-success-subtle text-success ms-2">
-                  📚 {question.subject}
-                </span>
-              )}
-            </div>
-            {badge}
-          </div>
-          {statsBlock}
-          <div
-            className="fs-5 fw-medium mb-3"
-            dangerouslySetInnerHTML={{
-              __html: TextFormatter.formatQuestionText(question.text),
-            }}
-          ></div>
-          <div className="mb-3">
-            {question.options.map((opt, optIdx) => {
-              let optionClass = "option p-3 mb-2 border rounded";
-              let icon = "";
-              if (optIdx === correctIndex) {
-                optionClass =
-                  "option p-3 mb-2 border rounded bg-success-subtle border-success fw-bold text-success";
-                icon = "✅";
-              } else if (uAns && uAns.answer === optIdx && status === "incorrect") {
-                optionClass =
-                  "option p-3 mb-2 border rounded bg-danger-subtle border-danger text-danger";
-                icon = "❌";
-              }
-              return (
-                <div key={optIdx} className={optionClass}>
-                  {icon} <span className="ms-1">{opt}</span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="explanation mt-3 shadow-sm">
-            <strong>💡 Explanation:</strong>
-            <div
-              className="mt-1 small"
-              dangerouslySetInnerHTML={{
-                __html: question.explanation || "No explanation provided.",
-              }}
-            ></div>
-          </div>
-        </div>
-      </div>
-    );
-  });
-
-  const anyVisible = quizData.some((question, index) => {
-    const uAns = userAnswers[index];
-    let status = "unattempted";
-    if (uAns) status = uAns.answer === getCorrectIndex(question) ? "correct" : "incorrect";
-    const cardSubject = question.subject || "";
-    const matchStatus = statusFilter === "all" || status === statusFilter;
-    const matchSubject = subjectFilter === "all" || cardSubject === subjectFilter;
-    return matchStatus && matchSubject;
-  });
-
-  return (
-    <div id="review-container">
-      {cards}
-      {!anyVisible && (
-        <div className="alert alert-info text-center mt-3 alert-info-no-questions">
-          No questions found for this filter.
-        </div>
-      )}
+    <div className={`stat ${vClass}`}>
+      <span className="eyebrow">{label}</span>
+      <span className="stat__value">{value}</span>
+      {sub && <span className="stat__sub">{sub}</span>}
     </div>
   );
 }

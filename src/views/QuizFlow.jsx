@@ -1,399 +1,248 @@
 /* =========================================
-   5–7. QUIZ CORE, TIMER & NAVIGATION, SUBMIT & STATISTICS
-   Ported from quiz.js. Every calculation, Firestore write,
-   localStorage key and timing rule is unchanged.
+   TEST RUNNER (ported from quiz.js)
    ========================================= */
-import React, {
-  useCallback,
-  useEffect,
-  useReducer,
-  useRef,
-  useState,
-} from "react";
-import firebase, { db } from "../lib/firebase";
+import React, { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { db } from "../lib/firebase";
 import { useApp } from "../store";
 import { DataManager } from "../lib/dataManager";
 import { QuizTimer } from "../lib/timer";
 import { getCorrectIndex, TextFormatter } from "../lib/helpers";
 import { toastr } from "../lib/toastr";
 import ReviewMode from "./ReviewMode";
-import PracticeRunner from "./PracticeRunner";
 
-/* ---------- Start Quiz Modal (showStartModal/updateStartModal) ---------- */
-function StartQuizModal({ subject, chapter, numQuestions, savedTime, onStart, onCancel }) {
-  const ready = numQuestions !== null;
-  // Calculate duration: 1.2 min per question
-  const durationMin = ready ? Math.ceil(numQuestions * 1.2) : null;
-
-  return (
-    <div className="app-modal-backdrop">
-      <div className="modal-dialog modal-dialog-centered app-modal-dialog">
-        <div className="modal-content border-0 shadow-lg rounded-4">
-          <div className="modal-header border-0 bg-light rounded-top-4">
-            <h5 className="modal-title fw-bold text-primary">Ready to Start?</h5>
-          </div>
-          <div className="modal-body p-4 text-center">
-            <div className="mb-4">
-              <div className="display-1 mb-3">📝</div>
-              <h4 className="fw-bold mb-2">{subject}</h4>
-              <p className="text-muted">{chapter}</p>
-            </div>
-
-            <div className="row g-3 justify-content-center mb-4">
-              <div className="col-6">
-                <div className="p-3 bg-light rounded-3 border">
-                  <small className="text-muted d-block text-uppercase fw-bold" style={{ fontSize: "0.7rem" }}>
-                    Questions
-                  </small>
-                  <span className="fs-4 fw-bold text-dark">
-                    {ready ? (
-                      numQuestions
-                    ) : (
-                      <span className="spinner-border spinner-border-sm text-primary" role="status"></span>
-                    )}
-                  </span>
-                </div>
-              </div>
-              <div className="col-6">
-                <div className="p-3 bg-light rounded-3 border">
-                  <small className="text-muted d-block text-uppercase fw-bold" style={{ fontSize: "0.7rem" }}>
-                    Duration
-                  </small>
-                  <span className="fs-4 fw-bold text-dark">
-                    {ready ? (
-                      durationMin + "m"
-                    ) : (
-                      <span className="spinner-border spinner-border-sm text-primary" role="status"></span>
-                    )}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="alert alert-info border-0 d-flex align-items-center" role="alert">
-              <i className="bi bi-info-circle-fill me-2 fs-5"></i>
-              <div className="small text-start">
-                Once you start, the timer will begin. Good luck!
-              </div>
-            </div>
-          </div>
-          <div className="modal-footer border-0 justify-content-center pb-4">
-            <button type="button" className="btn btn-secondary-custom px-4" onClick={onCancel}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className={`btn btn-primary-custom px-5 shadow pulse-button ${!ready ? "disabled" : ""}`}
-              disabled={!ready}
-              onClick={() => onStart(savedTime)}
-            >
-              🚀 Start Test
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* =========================================
-   TEST / REVISION FLOW
-   ========================================= */
 export default function QuizFlow() {
-  const app = useApp();
-  const { viewParams } = app;
-
-  if (viewParams.mode === "practice") {
-    // Practice mode lives in its own runner (practice.js port)
-    return <PracticeRunner key={viewParams.key} />;
-  }
-
-  return <TestFlow key={viewParams.key} />;
-}
-
-function TestFlow() {
   const {
     g,
     currentUser,
     viewParams,
-    showHome,
     showDashboard,
-    showTestSelection,
     showChapters,
-    showPerformance,
-    loadQuiz,
     bumpHistory,
   } = useApp();
 
-  const isRevision = viewParams.mode === "revision";
+  const [phase, setPhase] = useState("loading");
+  const [timerDisplay, setTimerDisplay] = useState({ text: "00:00", low: false });
+  const [, forceUpdate] = useReducer((x) => x + 1, 0);
 
-  /* ---- module-level globals from auth.js/quiz.js, held in refs ---- */
   const s = useRef({
-    currentSubject: viewParams.subjectKey,
-    currentChapterId: isRevision
-      ? "revision_" + Date.now()
-      : viewParams.subjectKey.replace(/\s+/g, "_") + "_" + viewParams.chapterId,
-    currentChapterName: isRevision
-      ? "Revision Test"
-      : decodeURIComponent(viewParams.chapterName),
-    currentQuizData: isRevision ? viewParams.questions : [],
-    currentQuestionIndex: 0,
+    currentSubject: "",
+    currentChapterId: "",
+    currentChapterName: "",
+    currentQuizData: [],
     userAnswers: {},
     markedForReview: {},
     questionTimeSpent: {},
-    currentQuestionStartTime: null,
+    currentQuestionIndex: 0,
     quizSubmitted: false,
-    isReviewMode: !!viewParams.reviewMode,
-    reviewSource: viewParams.source || null,
-    currentTimerSeconds: 0,
-    isTimerPaused: false,
     submittedResult: null,
-    statsLine: null, // "Calculating class standing..." replacement content
+    isTimerPaused: false,
+    statsLine: null,
   }).current;
 
   const timerRef = useRef(null);
-  const [, forceUpdate] = useReducer((x) => x + 1, 0);
-  const [phase, setPhase] = useState(
-    isRevision ? "active" : s.isReviewMode ? "loading" : "loading"
-  ); // loading | startModal | active | review | error
-  const [timerDisplay, setTimerDisplay] = useState({ text: "", low: false });
+  const questionStartTimeRef = useRef(Date.now());
   const savedTimeRef = useRef(null);
+  const submitAllRef = useRef(() => {});
 
-  /* ---------- Time tracking helpers (verbatim) ---------- */
   const updateQuestionTimer = useCallback(() => {
-    if (!s.currentQuestionStartTime || s.quizSubmitted || s.isReviewMode) return;
-
+    if (s.isTimerPaused || s.quizSubmitted) return;
     const now = Date.now();
-    const elapsed = (now - s.currentQuestionStartTime) / 1000; // seconds
-
+    const spent = Math.floor((now - questionStartTimeRef.current) / 1000);
     s.questionTimeSpent[s.currentQuestionIndex] =
-      (s.questionTimeSpent[s.currentQuestionIndex] || 0) + elapsed;
-    s.currentQuestionStartTime = now;
+      (s.questionTimeSpent[s.currentQuestionIndex] || 0) + spent;
+    questionStartTimeRef.current = now;
   }, [s]);
 
   const saveQuizProgress = useCallback(() => {
-    if (!s.currentChapterId || s.quizSubmitted || s.isReviewMode) return;
-
-    // Update time for current question without resetting start time (just for saving)
-    let currentQTime = 0;
-    if (s.currentQuestionStartTime) {
-      currentQTime = (Date.now() - s.currentQuestionStartTime) / 1000;
+    if (!s.currentChapterId || s.currentChapterId.startsWith("revision_") || s.quizSubmitted) return;
+    try {
+      const p = {
+        userAnswers: s.userAnswers,
+        markedForReview: s.markedForReview,
+        timeLeft: timerRef.current ? timerRef.current.getTimeLeft() : null,
+        currentIndex: s.currentQuestionIndex,
+        questionTimeSpent: s.questionTimeSpent,
+      };
+      const key = `quiz_progress_${s.currentChapterId}`;
+      DataManager.cache[key] = JSON.stringify(p);
+      localStorage.setItem(key, JSON.stringify(p));
+    } catch (e) {
+      console.error("Save progress failed", e);
     }
-
-    const timeData = { ...s.questionTimeSpent };
-    timeData[s.currentQuestionIndex] =
-      (timeData[s.currentQuestionIndex] || 0) + currentQTime;
-
-    const progressData = {
-      userAnswers: s.userAnswers,
-      markedForReview: s.markedForReview,
-      questionTimeSpent: timeData, // Save time tracking
-      lastQuestionIndex: s.currentQuestionIndex,
-      remainingTime: s.currentTimerSeconds, // Save the current timer state
-      timestamp: new Date().getTime(),
-    };
-    localStorage.setItem(
-      `quiz_progress_${s.currentChapterId}`,
-      JSON.stringify(progressData)
-    );
   }, [s]);
 
-  const clearQuizProgress = useCallback((chapterId) => {
-    localStorage.removeItem(`quiz_progress_${chapterId}`);
+  const clearQuizProgress = useCallback((chapId) => {
+    const key = `quiz_progress_${chapId}`;
+    delete DataManager.cache[key];
+    localStorage.removeItem(key);
   }, []);
 
-  /* ---------- Timer (startTimer, verbatim rules) ---------- */
-  const submitAllRef = useRef(() => {});
-  const startTimer = useCallback(
-    (numQuestions, savedTime = null) => {
-      s.currentTimerSeconds =
-        savedTime !== null && savedTime !== undefined
-          ? savedTime
-          : Math.floor(numQuestions * 1.2 * 60);
+  const toggleTimer = () => {
+    if (s.quizSubmitted) return;
+    if (s.isTimerPaused) {
+      if (timerRef.current) timerRef.current.resume();
       s.isTimerPaused = false;
-
-      if (timerRef.current) timerRef.current.stop();
-
-      timerRef.current = new QuizTimer(
-        (text, low) => setTimerDisplay({ text, low }),
-        (seconds) => {
-          s.currentTimerSeconds = seconds;
-          saveQuizProgress();
-        },
-        () => {
-          toastr.warning("Time's up! Submitting test...");
-          submitAllRef.current(true);
-        }
-      );
-
-      timerRef.current.start(s.currentTimerSeconds);
-    },
-    [s, saveQuizProgress]
-  );
-
-  const toggleTimer = useCallback(() => {
-    if (!timerRef.current) return;
-
-    if (timerRef.current.isPaused) {
-      timerRef.current.resume();
-      s.isTimerPaused = false;
+      questionStartTimeRef.current = Date.now();
       toastr.success("Timer Resumed");
     } else {
-      timerRef.current.pause();
+      updateQuestionTimer();
+      if (timerRef.current) timerRef.current.pause();
       s.isTimerPaused = true;
-      toastr.info("Timer Paused");
+      toastr.warning("Timer Paused. Options disabled.");
     }
     forceUpdate();
-  }, [s]);
+  };
 
+  const startQuizExecution = (resumedTimeLeft) => {
+    setPhase("active");
+    questionStartTimeRef.current = Date.now();
 
+    const limit = s.currentQuizData.length * 1.5 * 60;
+    const initialTime = resumedTimeLeft !== null ? resumedTimeLeft : limit;
 
-  /* ---------- loadQuiz body (fetch questions, restore progress) ---------- */
-  useEffect(() => {
-    if (isRevision) {
-      // startRevisionTestExecution (verbatim state reset)
-      g.isPracticeMode = false;
-      s.quizSubmitted = false;
-      s.currentQuestionIndex = 0;
+    timerRef.current = new QuizTimer(
+      (text, low) => setTimerDisplay({ text, low }),
+      null,
+      () => {
+        toastr.warning("Time's up! Auto-submitting...");
+        submitAllRef.current(true);
+      }
+    );
+    timerRef.current.start(initialTime);
+  };
+
+  const loadQuiz = useCallback(
+    async (subj, chapId, chapName, skipModal = false, pastData = null, referrer = null) => {
+      s.currentSubject = subj;
+      s.currentChapterId = chapId;
+      s.currentChapterName = chapName;
       s.userAnswers = {};
       s.markedForReview = {};
       s.questionTimeSpent = {};
-      s.currentQuestionStartTime = null;
+      s.currentQuestionIndex = 0;
+      s.quizSubmitted = false;
+      s.submittedResult = null;
+      s.isTimerPaused = false;
 
-      setPhase("active");
-      startTimer(s.currentQuizData.length, null);
-      s.currentQuestionStartTime = Date.now();
-      forceUpdate();
-      return () => {
-        if (timerRef.current) timerRef.current.stop();
-      };
-    }
+      if (!chapId) return;
 
-    let cancelled = false;
-    async function run() {
       try {
-        const data = await DataManager.fetchQuizQuestions(s.currentChapterId);
-        if (cancelled) return;
-        if (!data) {
-          toastr.error("Quiz questions not found in database!");
-          showDashboard();
+        let qData = [];
+        if (chapId.startsWith("revision_")) {
+          qData = DataManager.cache[`quiz_data_${chapId}`];
+          if (!qData) throw new Error("Revision data lost.");
+        } else {
+          qData = await DataManager.fetchQuizQuestions(chapId);
+        }
+
+        if (!qData) {
+          toastr.error("Failed to load questions. Check your internet connection.");
+          showChapters(subj);
           return;
         }
-        s.currentQuizData = data;
 
-        s.currentQuestionIndex = 0;
-        s.userAnswers = {};
-        s.markedForReview = {};
-        s.questionTimeSpent = {};
-        s.currentQuestionStartTime = null;
-        s.quizSubmitted = false;
-
-        let savedTime = null;
-        if (!s.isReviewMode) {
-          const savedProgress = localStorage.getItem(
-            `quiz_progress_${s.currentChapterId}`
-          );
-          if (savedProgress) {
-            const parsedProgress = JSON.parse(savedProgress);
-            const oneDay = 24 * 60 * 60 * 1000;
-            if (new Date().getTime() - parsedProgress.timestamp < oneDay) {
-              s.userAnswers = parsedProgress.userAnswers || {};
-              s.markedForReview = parsedProgress.markedForReview || {};
-              s.questionTimeSpent = parsedProgress.questionTimeSpent || {};
-              s.currentQuestionIndex = parsedProgress.lastQuestionIndex || 0;
-              savedTime = parsedProgress.remainingTime; // Restore the time value
-              toastr.info("Restored your previous progress and time.");
-            }
-          }
+        if (qData.length === 0) {
+          toastr.error("No questions found in this test.");
+          showChapters(subj);
+          return;
         }
+        s.currentQuizData = qData;
 
-        if (timerRef.current) timerRef.current.stop();
-
-        if (s.isReviewMode && viewParams.pastData) {
-          s.userAnswers = viewParams.pastData.userAnswers || {};
-          s.questionTimeSpent = viewParams.pastData.questionTimeSpent || {};
+        if (pastData) {
           s.quizSubmitted = true;
+          s.userAnswers = pastData.userAnswers || {};
+          s.questionTimeSpent = pastData.questionTimeSpent || {};
+          s.submittedResult = { resultObject: pastData };
+          setPhase("review");
+          return;
         }
 
-        if (s.isReviewMode) {
-          setPhase("review");
+        const progKey = `quiz_progress_${chapId}`;
+        const savedProgStr =
+          DataManager.cache[progKey] || localStorage.getItem(progKey);
+
+        if (savedProgStr && !chapId.startsWith("revision_")) {
+          const p = JSON.parse(savedProgStr);
+          s.userAnswers = p.userAnswers || {};
+          s.markedForReview = p.markedForReview || {};
+          s.currentQuestionIndex = p.currentIndex || 0;
+          s.questionTimeSpent = p.questionTimeSpent || {};
+          savedTimeRef.current = p.timeLeft;
         } else {
-          savedTimeRef.current = savedTime;
+          savedTimeRef.current = null;
+        }
+
+        if (skipModal) {
+          startQuizExecution(savedTimeRef.current);
+        } else {
           setPhase("startModal");
         }
-        forceUpdate();
-      } catch (error) {
-        console.error("Firebase fetch error:", error);
-        toastr.error("Failed to load questions.");
-        showDashboard();
+      } catch (err) {
+        console.error(err);
+        toastr.error("Failed to load quiz.");
+        showChapters(subj);
       }
-    }
-    run();
-    return () => {
-      cancelled = true;
-      if (timerRef.current) timerRef.current.stop();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /* ---------- startQuizExecution ---------- */
-  const startQuizExecution = useCallback(
-    (savedTime) => {
-      setPhase("active");
-      startTimer(s.currentQuizData.length, savedTime ?? null);
-      s.currentQuestionStartTime = Date.now(); // Start tracking first question
-      forceUpdate();
     },
-    [s, startTimer]
+    [s, showChapters]
   );
 
-  /* ---------- exitQuiz (verbatim routing) ---------- */
+  useEffect(() => {
+    loadQuiz(
+      viewParams.subjectKey,
+      viewParams.chapterId,
+      viewParams.chapterName,
+      viewParams.reviewMode,
+      viewParams.pastData,
+      viewParams.source
+    );
+  }, [viewParams, loadQuiz]);
+
   const exitQuiz = useCallback(() => {
-    if (timerRef.current) timerRef.current.stop();
-
-    if (s.isReviewMode && s.reviewSource === "performance") {
-      showPerformance();
-    } else if (
-      s.currentSubject &&
-      (DataManager.cache.quizManifest || window.allQuizData || {})[s.currentSubject]
-    ) {
-      showChapters(s.currentSubject);
-    } else {
-      // Safety Fallback
-      showDashboard();
+    if (!s.quizSubmitted && phase === "active") {
+      updateQuestionTimer();
+      saveQuizProgress();
     }
-  }, [s, showPerformance, showChapters, showDashboard]);
+    if (timerRef.current) {
+      timerRef.current.stop();
+      timerRef.current = null;
+    }
+    const r = viewParams.referrer;
+    if (r === "dashboard") showDashboard();
+    else if (r === "chapters" || r === "subjects") showChapters(s.currentSubject);
+    else showDashboard();
+  }, [s, phase, viewParams.referrer, updateQuestionTimer, saveQuizProgress, showDashboard, showChapters]);
 
-  /* ---------- answer / nav actions (verbatim behaviour) ---------- */
+  const gotoQuestion = (idx) => {
+    if (s.isTimerPaused) return;
+    updateQuestionTimer();
+    s.currentQuestionIndex = idx;
+    questionStartTimeRef.current = Date.now();
+    forceUpdate();
+  };
+
+  const navigateQuestions = (step) => {
+    if (s.isTimerPaused) return;
+    const n = s.currentQuestionIndex + step;
+    if (n >= 0 && n < s.currentQuizData.length) {
+      gotoQuestion(n);
+    }
+  };
+
   const selectAnswer = (idx) => {
-    if (!s.userAnswers[s.currentQuestionIndex])
-      s.userAnswers[s.currentQuestionIndex] = {};
-    s.userAnswers[s.currentQuestionIndex].answer = idx;
+    if (s.quizSubmitted) return;
+    if (!s.userAnswers[s.currentQuestionIndex]) {
+      s.userAnswers[s.currentQuestionIndex] = { answer: idx, surety: 100 };
+    } else {
+      s.userAnswers[s.currentQuestionIndex].answer = idx;
+    }
     saveQuizProgress();
     forceUpdate();
   };
 
   const selectSurety = (val) => {
-    if (!s.userAnswers[s.currentQuestionIndex])
-      s.userAnswers[s.currentQuestionIndex] = { answer: -1 };
+    if (s.quizSubmitted) return;
+    if (!s.userAnswers[s.currentQuestionIndex]) return;
     s.userAnswers[s.currentQuestionIndex].surety = val;
-    saveQuizProgress();
-    forceUpdate();
-  };
-
-  const navigateQuestions = (dir) => {
-    const next = s.currentQuestionIndex + dir;
-    if (next >= 0 && next < s.currentQuizData.length) {
-      updateQuestionTimer(); // Save time for current question
-      s.currentQuestionIndex = next;
-      saveQuizProgress();
-      forceUpdate();
-    }
-  };
-
-  const gotoQuestion = (i) => {
-    updateQuestionTimer(); // Save time for current question
-    s.currentQuestionIndex = i;
     saveQuizProgress();
     forceUpdate();
   };
@@ -407,36 +256,28 @@ function TestFlow() {
 
   const toggleMarkForReview = () => {
     if (s.quizSubmitted) return;
-
     if (s.markedForReview[s.currentQuestionIndex]) {
       delete s.markedForReview[s.currentQuestionIndex];
-      toastr.info("Removed from Review");
     } else {
       s.markedForReview[s.currentQuestionIndex] = true;
-      toastr.success("Marked for Review");
     }
     saveQuizProgress();
     forceUpdate();
   };
 
-  /* =========================================
-     7. SUBMIT & STATISTICS (submitAll, verbatim)
-     ========================================= */
   const submitAll = useCallback(
     (forceSubmit = false) => {
       if (!forceSubmit && !window.confirm("Are you sure you want to submit?"))
         return;
 
       if (timerRef.current) timerRef.current.stop();
-      updateQuestionTimer(); // Finalize time for the last question
+      updateQuestionTimer();
 
       s.quizSubmitted = true;
       clearQuizProgress(s.currentChapterId);
 
       let score = 0;
-      let correct = 0,
-        incorrect = 0,
-        unattempted = 0;
+      let correct = 0, incorrect = 0, unattempted = 0;
       const totalQ = s.currentQuizData.length;
 
       s.currentQuizData.forEach((q, i) => {
@@ -446,13 +287,8 @@ function TestFlow() {
         if (uAns) {
           const isCorrect = uAns.answer === cIdx;
           s.userAnswers[i].isCorrect = isCorrect;
-          if (isCorrect) {
-            score += 2;
-            correct++;
-          } else {
-            score -= 0.66;
-            incorrect++;
-          }
+          if (isCorrect) { score += 2; correct++; }
+          else { score -= 0.66; incorrect++; }
         } else {
           unattempted++;
         }
@@ -460,9 +296,7 @@ function TestFlow() {
 
       const finalScore = parseFloat(score.toFixed(2));
       const totalMarks = totalQ * 2;
-      const percentage =
-        totalMarks > 0 ? ((finalScore / totalMarks) * 100).toFixed(1) : 0;
-
+      const percentage = totalMarks > 0 ? ((finalScore / totalMarks) * 100).toFixed(1) : 0;
       const now = new Date();
 
       const leaderboardEntry = {
@@ -482,18 +316,12 @@ function TestFlow() {
         totalMarks: totalMarks,
         scorePercent: parseFloat(percentage),
         userAnswers: s.userAnswers,
-        questionTimeSpent: s.questionTimeSpent, // Save time per question
+        questionTimeSpent: s.questionTimeSpent,
         timestamp: now,
       };
 
       s.submittedResult = {
-        correct,
-        incorrect,
-        unattempted,
-        finalScore,
-        totalMarks,
-        percentage,
-        resultObject,
+        correct, incorrect, unattempted, finalScore, totalMarks, percentage, resultObject,
       };
       s.statsLine = null;
       forceUpdate();
@@ -508,18 +336,11 @@ function TestFlow() {
             g.dashboardDataLoaded = true;
             bumpHistory();
 
-            // Invalidate caches
-            await DataManager.invalidateCache(
-              `global_stats_${s.currentChapterId}`
-            );
-            await DataManager.invalidateCache(
-              `user_history_${currentUser.uid}`
-            );
+            await DataManager.invalidateCache(`global_stats_${s.currentChapterId}`);
+            await DataManager.invalidateCache(`user_history_${currentUser.uid}`);
 
             if (!s.currentChapterId.startsWith("revision_")) {
-              const statsRef = db
-                .collection("chapter_stats")
-                .doc(s.currentChapterId);
+              const statsRef = db.collection("chapter_stats").doc(s.currentChapterId);
               try {
                 await db.runTransaction(async (transaction) => {
                   const sfDoc = await transaction.get(statsRef);
@@ -527,10 +348,7 @@ function TestFlow() {
 
                   if (!sfDoc.exists) {
                     const initCorrectCounts = s.currentQuizData.map((q, i) =>
-                      s.userAnswers[i] &&
-                      s.userAnswers[i].answer === getCorrectIndex(q)
-                        ? 1
-                        : 0
+                      s.userAnswers[i] && s.userAnswers[i].answer === getCorrectIndex(q) ? 1 : 0
                     );
                     const initAttemptedCounts = s.currentQuizData.map((q, i) =>
                       s.userAnswers[i] ? 1 : 0
@@ -548,25 +366,15 @@ function TestFlow() {
                   } else {
                     const data = sfDoc.data();
                     const newAttempts = (data.totalAttempts || 0) + 1;
-                    const newAvg =
-                      ((data.totalScore || 0) + newScore) / newAttempts;
+                    const newAvg = ((data.totalScore || 0) + newScore) / newAttempts;
                     let currentLeaderboard = data.leaderboard || [];
                     currentLeaderboard.push(leaderboardEntry);
-                    currentLeaderboard.sort(
-                      (a, b) => b.scorePercent - a.scorePercent
-                    );
-                    if (currentLeaderboard.length > 10)
-                      currentLeaderboard = currentLeaderboard.slice(0, 10);
+                    currentLeaderboard.sort((a, b) => b.scorePercent - a.scorePercent);
+                    if (currentLeaderboard.length > 10) currentLeaderboard = currentLeaderboard.slice(0, 10);
 
                     let cCounts = [...(data.correctCounts || [])];
                     let aCounts = [...(data.attemptedCounts || [])];
-
-                    // Densify arrays: Ensure no holes and extend to current length
-                    const maxLen = Math.max(
-                      cCounts.length,
-                      aCounts.length,
-                      s.currentQuizData.length
-                    );
+                    const maxLen = Math.max(cCounts.length, aCounts.length, s.currentQuizData.length);
                     for (let j = 0; j < maxLen; j++) {
                       if (cCounts[j] == null) cCounts[j] = 0;
                       if (aCounts[j] == null) aCounts[j] = 0;
@@ -600,26 +408,15 @@ function TestFlow() {
               toastr.success("Revision test result saved!");
             }
 
-            const stats = await DataManager.fetchGlobalStats(
-              s.currentChapterId,
-              true
-            );
+            const stats = await DataManager.fetchGlobalStats(s.currentChapterId, true);
             if (stats) {
               let betterThan = 0;
               const pct = parseFloat(percentage);
-              const allScoresLen = stats.allScores.length;
-              for (let k = 0; k < allScoresLen; k++) {
-                if (stats.allScores[k] < pct) {
-                  betterThan++;
-                }
+              for (let k = 0; k < stats.allScores.length; k++) {
+                if (stats.allScores[k] < pct) betterThan++;
               }
-              const percentile =
-                stats.totalAttempts > 0
-                  ? ((betterThan / stats.totalAttempts) * 100).toFixed(0)
-                  : 0;
-              s.statsLine = `🌍 Performance: Top <strong>${
-                100 - percentile
-              }%</strong>. (Avg: ${stats.avg.toFixed(1)}%)`;
+              const percentile = stats.totalAttempts > 0 ? ((betterThan / stats.totalAttempts) * 100).toFixed(0) : 0;
+              s.statsLine = `🌍 Class Performance: Top <strong>${100 - percentile}%</strong>. (Avg: ${stats.avg.toFixed(1)}%)`;
               forceUpdate();
             }
           });
@@ -629,14 +426,11 @@ function TestFlow() {
   );
   submitAllRef.current = submitAll;
 
-  /* ---------- Review right after submit ---------- */
   const reviewAfterSubmit = () => {
-    const subjectPrefix = s.currentSubject.replace(/\s+/g, "_") + "_";
-    const originalChapId = s.currentChapterId.replace(subjectPrefix, "");
     loadQuiz(
       s.currentSubject,
-      originalChapId,
-      encodeURIComponent(s.currentChapterName),
+      s.currentChapterId,
+      s.currentChapterName,
       true,
       s.submittedResult.resultObject,
       "chapters"
@@ -648,74 +442,64 @@ function TestFlow() {
      ========================================= */
   if (phase === "loading") {
     return (
-      <section className="quiz-section py-5">
-        <div className="container">
-          <div className="d-flex justify-content-between mb-4">
-            <button className="btn btn-primary-custom px-4 shadow" onClick={exitQuiz}>
-              ← Exit
-            </button>
-          </div>
-          <div className="text-center py-5">
-            <div className="spinner-border text-primary" role="status"></div>
-            <p className="mt-2 text-muted">Loading Questions...</p>
-          </div>
-        </div>
-      </section>
+      <div className="page empty">
+        <div className="spinner"></div>
+        <p style={{ marginTop: 14 }}>Loading Questions...</p>
+      </div>
     );
   }
 
   if (phase === "startModal") {
     return (
-      <section className="quiz-section py-5">
-        <div className="container">
-          <div className="d-flex justify-content-between mb-4">
-            <button className="btn btn-primary-custom px-4 shadow" onClick={exitQuiz}>
-              ← Exit
+      <div className="modal-backdrop">
+        <div className="modal">
+          <h3 className="modal__title">Ready to Start?</h3>
+          <p style={{ color: "var(--ink-soft)", marginBottom: 20 }}>
+            {s.currentSubject} &rsaquo; {s.currentChapterName}
+          </p>
+          <div style={{ display: "grid", gap: 10, marginBottom: 20 }}>
+            <div className="stat">
+              <span className="eyebrow">Questions</span>
+              <span className="stat__value">{s.currentQuizData.length}</span>
+            </div>
+            {savedTimeRef.current !== null && (
+              <div className="stat stat--pen">
+                <span className="eyebrow">Status</span>
+                <span className="stat__value" style={{ fontSize: 18 }}>In Progress</span>
+                <span className="stat__sub">Resuming from previous state</span>
+              </div>
+            )}
+          </div>
+          <div className="modal__actions">
+            <button className="btn btn--ghost" onClick={() => showChapters(s.currentSubject)}>Cancel</button>
+            <button className="btn btn--primary" onClick={() => startQuizExecution(savedTimeRef.current)}>
+              {savedTimeRef.current !== null ? "Resume Test" : "Start Test"}
             </button>
           </div>
         </div>
-        <StartQuizModal
-          subject={s.currentSubject}
-          chapter={s.currentChapterName}
-          numQuestions={s.currentQuizData.length}
-          savedTime={savedTimeRef.current}
-          onStart={startQuizExecution}
-          onCancel={() => showChapters(s.currentSubject)}
-        />
-      </section>
+      </div>
     );
   }
 
   if (phase === "review") {
     return (
-      <section className="quiz-section py-5">
-        <div className="container">
-          <div className="d-flex justify-content-between mb-4">
-            <button className="btn btn-primary-custom px-4 shadow" onClick={exitQuiz}>
-              ← Exit
-            </button>
-          </div>
-          <div className="row">
-            <div className="col-12">
-              <div className="quiz-box h-100">
-                <ReviewMode
-                  quizData={s.currentQuizData}
-                  userAnswers={s.userAnswers}
-                  questionTimeSpent={s.questionTimeSpent}
-                  resultData={viewParams.pastData}
-                  chapterId={s.currentChapterId}
-                  chapterName={s.currentChapterName}
-                  onExit={exitQuiz}
-                />
-              </div>
-            </div>
-          </div>
+      <div className="page" style={{ maxWidth: 1200 }}>
+        <div style={{ marginBottom: 16 }}>
+          <button className="btn btn--ghost" onClick={exitQuiz}>← Back</button>
         </div>
-      </section>
+        <ReviewMode
+          quizData={s.currentQuizData}
+          userAnswers={s.userAnswers}
+          questionTimeSpent={s.questionTimeSpent}
+          resultData={viewParams.pastData}
+          chapterId={s.currentChapterId}
+          chapterName={s.currentChapterName}
+          onExit={exitQuiz}
+        />
+      </div>
     );
   }
 
-  /* ---------- Active quiz ---------- */
   const question = s.currentQuizData[s.currentQuestionIndex];
   const correctIndex = getCorrectIndex(question);
   const uAnsCurrent = s.userAnswers[s.currentQuestionIndex];
@@ -723,290 +507,201 @@ function TestFlow() {
   const isMarked = !!s.markedForReview[s.currentQuestionIndex];
 
   return (
-    <section className="quiz-section py-5">
-      <div className="container">
-        <div className="d-flex justify-content-between mb-4">
-          <button id="quiz-back-btn" className="btn btn-primary-custom px-4 shadow" onClick={exitQuiz}>
-            ← Exit
-          </button>
+    <div className="runner">
+      <div className="runner__bar">
+        <button className="btn btn--ghost" onClick={exitQuiz}>← Exit</button>
+        <h4 style={{ margin: 0, color: "var(--ink-soft)" }}>{s.currentChapterName}</h4>
+        <div className={`timer-pill ${timerDisplay.low ? "timer-pill--low" : ""}`}>
+          ⏳ {timerDisplay.text || "00:00"}
         </div>
-        <div className="row">
-          <div className="col-lg-8 mb-4">
-            <div className="quiz-box h-100" id="quiz-content">
-              <div className="d-flex justify-content-between align-items-center mb-4">
-                <h4 className="fw-bold text-primary m-0">{s.currentChapterName}</h4>
-                <button
-                  id="mark-review-btn"
-                  className={`btn btn-sm fw-bold shadow-sm ${
-                    isMarked ? "btn-primary-custom" : "btn-secondary-custom"
-                  }`}
-                  onClick={toggleMarkForReview}
-                >
-                  {isMarked ? (
-                    <>
-                      <i className="bi bi-bookmark-check-fill"></i> Unmark Review
-                    </>
-                  ) : (
-                    <>
-                      <i className="bi bi-bookmark-star"></i> Mark for Review
-                    </>
-                  )}
-                </button>
-              </div>
+      </div>
 
-              <div
-                id="question-container"
-                style={
-                  s.isTimerPaused
-                    ? { filter: "blur(8px)", pointerEvents: "none" }
-                    : { filter: "none", pointerEvents: "all" }
-                }
-              >
-                <div className="question">
-                  <div className="mb-3 lead fw-bold">
-                    Q{s.currentQuestionIndex + 1}.{" "}
-                    <span
-                      dangerouslySetInnerHTML={{
-                        __html: TextFormatter.formatQuestionText(question.text),
-                      }}
-                    />
-                  </div>
-
-                  {question.options.map((opt, idx) => {
-                    const isSelected = uAnsCurrent && uAnsCurrent.answer === idx;
-                    let labelClass = "option shadow-sm";
-                    if (s.quizSubmitted) {
-                      if (idx === correctIndex) labelClass += " correct-answer-label";
-                      if (isSelected && idx !== correctIndex)
-                        labelClass += " incorrect-answer-label";
-                    }
-                    return (
-                      <label className={labelClass} key={idx}>
-                        <input
-                          type="radio"
-                          name={`q${s.currentQuestionIndex}`}
-                          value={idx}
-                          checked={!!isSelected}
-                          disabled={s.quizSubmitted}
-                          onChange={() => {
-                            if (!s.quizSubmitted) selectAnswer(idx);
-                          }}
-                        />{" "}
-                        <span dangerouslySetInnerHTML={{ __html: opt }} />
-                      </label>
-                    );
-                  })}
-
-                  {/* --- SURETY MATRIX --- */}
-                  <div className="mt-4 mb-3 animate-fade-in">
-                    <div className="surety-label">Confidence Level</div>
-                    <div className="surety-matrix shadow-sm" role="radiogroup" aria-label="Confidence Level">
-                      {[100, 75, 50, 0].map((val) => (
-                        <div
-                          key={val}
-                          className={`surety-opt surety-${val} ${
-                            currentSurety === val ? "selected" : ""
-                          }`}
-                          data-val={val}
-                          role="radio"
-                          tabIndex={0}
-                          aria-checked={currentSurety === val}
-                          aria-label={`${val}% Confidence`}
-                          onClick={() => {
-                            if (!s.quizSubmitted) selectSurety(val);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              if (!s.quizSubmitted) selectSurety(val);
-                            }
-                          }}
-                        >
-                          {val}%
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {s.quizSubmitted && question.explanation && (
-                    <div className="explanation shadow-sm mt-3">
-                      <strong>💡 Explanation:</strong> <br />
-                      <span dangerouslySetInnerHTML={{ __html: question.explanation }} />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="d-flex justify-content-between mt-4">
-                <button
-                  id="prev-btn"
-                  className="btn btn-secondary-custom px-4"
-                  disabled={s.currentQuestionIndex === 0}
-                  onClick={() => navigateQuestions(-1)}
-                >
-                  Previous
-                </button>
-                <button
-                  id="clear-btn"
-                  className="btn btn-primary-custom px-4"
-                  disabled={s.quizSubmitted}
-                  onClick={clearSelection}
-                >
-                  Clear
-                </button>
-                <button
-                  id="next-btn"
-                  className="btn btn-secondary-custom px-4"
-                  disabled={s.currentQuestionIndex === s.currentQuizData.length - 1}
-                  onClick={() => navigateQuestions(1)}
-                >
-                  Next
-                </button>
-              </div>
-
-              {/* Feedback after submit (showFeedbackText) */}
-              <div id="question-feedback" className="mt-3 text-center">
-                {s.quizSubmitted &&
-                  (uAnsCurrent && uAnsCurrent.answer === correctIndex ? (
-                    <h5 className="text-success fw-bold">Correct! 🎉</h5>
-                  ) : uAnsCurrent ? (
-                    <h5 className="text-danger fw-bold">Incorrect. ❌</h5>
-                  ) : (
-                    <h5 className="text-secondary fw-bold">Unattempted. ⚪</h5>
-                  ))}
-              </div>
-
-              {/* Result panel */}
-              <div id="result" className="mt-4 text-center">
-                {s.submittedResult && (
-                  <>
-                    <div className="alert alert-primary mt-3 shadow-sm" role="alert">
-                      <h4 className="alert-heading fw-bold">Test Complete! 🏆</h4>
-                      <hr />
-                      <p>
-                        ✅ Correct: <strong>{s.submittedResult.correct}</strong> | ❌
-                        Incorrect: <strong>{s.submittedResult.incorrect}</strong>
-                      </p>
-                      <p>
-                        ⚪ Unattempted:{" "}
-                        <strong>{s.submittedResult.unattempted}</strong>
-                      </p>
-                      <h3 className="text-primary mt-2">
-                        Score: {s.submittedResult.finalScore} /{" "}
-                        {s.submittedResult.totalMarks} (
-                        {s.submittedResult.percentage}%)
-                      </h3>
-                      <div id="stats-loading" className="mt-2 text-muted small">
-                        {s.statsLine ? (
-                          <span dangerouslySetInnerHTML={{ __html: s.statsLine }} />
-                        ) : (
-                          <>
-                            <span className="spinner-border spinner-border-sm"></span>{" "}
-                            Calculating class standing...
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div id="result-actions" className="d-flex justify-content-center gap-2 mt-2">
-                      <button className="btn btn-primary-custom px-4 shadow" onClick={reviewAfterSubmit}>
-                        👁 Review Performance
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
+      <div className="runner__grid">
+        <div className="card" style={{ padding: "24px 28px" }}>
+          <div className="card__head">
+            <h2 className="card__title">Question {s.currentQuestionIndex + 1}</h2>
+            <button
+              className={`btn btn--sm ${isMarked ? "btn--subtle" : "btn--ghost"}`}
+              onClick={toggleMarkForReview}
+            >
+              {isMarked ? "★ Unmark" : "☆ Mark for Review"}
+            </button>
           </div>
 
-          {/* Question Palette Sidebar */}
-          <div className="col-lg-4">
-            <div id="quiz-nav" className="quiz-nav-sidebar">
-              <div className="nav-header">Question Palette</div>
-              <div
-                className="timer-container shadow-sm position-relative"
-                style={{ paddingBottom: 45 }}
-              >
-                <span className="timer-label">Time Remaining</span>
-                <div
-                  id="timer-display"
-                  className={`timer-value ${timerDisplay.low ? "low-time" : ""}`}
-                >
-                  {timerDisplay.text || "00:00"}
-                </div>
-                <button
-                  id="timer-pause-btn"
-                  className={`btn btn-sm fw-bold position-absolute ${
-                    s.isTimerPaused ? "btn-primary-custom" : "btn-secondary-custom"
-                  }`}
-                  style={{
-                    bottom: 12,
-                    right: 12,
-                    fontSize: "0.85rem",
-                    padding: "5px 12px",
-                    borderRadius: 8,
-                  }}
-                  onClick={toggleTimer}
-                >
-                  {s.isTimerPaused ? (
-                    <>
-                      <i className="bi bi-play-fill"></i> Resume
-                    </>
-                  ) : (
-                    <>
-                      <i className="bi bi-pause-fill"></i> Pause
-                    </>
-                  )}
-                </button>
-              </div>
-              <div id="nav-container" className="nav-grid">
-                {s.currentQuizData.map((_, i) => {
-                  let cls = "nav-item shadow-sm nav-item-animate";
-                  if (i === s.currentQuestionIndex) cls += " active";
-                  const uAns = s.userAnswers[i];
-                  const marked = s.markedForReview[i];
-                  if (s.quizSubmitted) {
-                    const cIdx = getCorrectIndex(s.currentQuizData[i]);
-                    if (!uAns) cls += " unattempted";
-                    else if (uAns.answer === cIdx) cls += " correct-nav";
-                    else cls += " incorrect-nav";
-                  } else {
-                    if (uAns) cls += " attempted";
-                    if (marked) cls += " marked-nav";
+          <div
+            style={s.isTimerPaused ? { filter: "blur(8px)", pointerEvents: "none" } : { filter: "none" }}
+          >
+            <div style={{ fontSize: 17, fontWeight: 500, marginBottom: 24, lineHeight: 1.6 }}>
+              <span dangerouslySetInnerHTML={{ __html: TextFormatter.formatQuestionText(question.text) }} />
+            </div>
+
+            <div className="grid">
+              {question.options.map((opt, idx) => {
+                const isSelected = uAnsCurrent && uAnsCurrent.answer === idx;
+                let optionClass = "option";
+                let omrClass = "omr";
+
+                if (s.quizSubmitted) {
+                  if (idx === correctIndex) {
+                    optionClass += " option--correct";
+                    omrClass += " omr--correct";
+                  } else if (isSelected && idx !== correctIndex) {
+                    optionClass += " option--wrong";
+                    omrClass += " omr--wrong";
                   }
-                  return (
-                    <div
-                      key={i}
-                      className={cls}
-                      style={{ "--animation-delay": `${i * 30}ms` }}
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`Question ${i + 1}`}
-                      onClick={() => gotoQuestion(i)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          gotoQuestion(i);
-                        }
-                      }}
-                    >
-                      {i + 1}
-                    </div>
-                  );
-                })}
+                } else if (isSelected) {
+                  optionClass += " option--selected";
+                  omrClass += " omr--filled";
+                }
+
+                const labelMap = ["A", "B", "C", "D"];
+
+                return (
+                  <button
+                    key={idx}
+                    className={optionClass}
+                    disabled={s.quizSubmitted}
+                    onClick={() => { if (!s.quizSubmitted) selectAnswer(idx); }}
+                  >
+                    <div className={omrClass}>{labelMap[idx]}</div>
+                    <div className="option__text" dangerouslySetInnerHTML={{ __html: opt }} />
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ marginTop: 24 }}>
+              <span className="eyebrow" style={{ display: "block", marginBottom: 8 }}>Confidence Level</span>
+              <div className="confidence">
+                {[100, 75, 50, 0].map((val) => (
+                  <button
+                    key={val}
+                    className={`confidence__chip ${currentSurety === val ? "confidence__chip--on" : ""}`}
+                    disabled={s.quizSubmitted}
+                    onClick={() => { if (!s.quizSubmitted) selectSurety(val); }}
+                  >
+                    {val}% Confidence
+                  </button>
+                ))}
               </div>
-              {!s.quizSubmitted && (
-                <button
-                  id="final-submit-btn"
-                  className="btn btn-success-custom w-100 mt-4 py-2 fw-bold"
-                  onClick={() => submitAll(false)}
-                >
+            </div>
+
+            {s.quizSubmitted && question.explanation && (
+              <div className="explanation" style={{ marginTop: 24 }}>
+                <strong style={{ display: "block", marginBottom: 4 }}>💡 Explanation:</strong>
+                <span dangerouslySetInnerHTML={{ __html: question.explanation }} />
+              </div>
+            )}
+          </div>
+
+          <div className="runner__nav">
+            <button
+              className="btn btn--ghost"
+              disabled={s.currentQuestionIndex === 0}
+              onClick={() => navigateQuestions(-1)}
+            >
+              Previous
+            </button>
+            <button
+              className="btn btn--ghost"
+              disabled={s.quizSubmitted}
+              onClick={clearSelection}
+            >
+              Clear
+            </button>
+            <button
+              className="btn btn--ghost"
+              disabled={s.currentQuestionIndex === s.currentQuizData.length - 1}
+              onClick={() => navigateQuestions(1)}
+            >
+              Next
+            </button>
+          </div>
+
+          {s.submittedResult && (
+            <div style={{ marginTop: 30, borderTop: "1px dashed var(--line)", paddingTop: 30 }}>
+              <div className="score-strip">
+                <div className="score-strip__big">Score: {s.submittedResult.finalScore}</div>
+                <div>
+                  <div style={{ color: "var(--ink-soft)", fontSize: 13 }}>Total Marks</div>
+                  <div style={{ fontWeight: 600 }}>{s.submittedResult.totalMarks}</div>
+                </div>
+                <div>
+                  <div style={{ color: "var(--ink-soft)", fontSize: 13 }}>Accuracy</div>
+                  <div style={{ fontWeight: 600 }}>{s.submittedResult.percentage}%</div>
+                </div>
+              </div>
+
+              <div className="stats-grid">
+                <Stat variant="leaf" label="Correct" value={s.submittedResult.correct} />
+                <Stat variant="stamp" label="Incorrect" value={s.submittedResult.incorrect} />
+                <Stat label="Unattempted" value={s.submittedResult.unattempted} />
+              </div>
+              
+              <div style={{ marginTop: 16, color: "var(--ink-soft)", fontSize: 13 }}>
+                {s.statsLine ? (
+                  <span dangerouslySetInnerHTML={{ __html: s.statsLine }} />
+                ) : (
+                  "Calculating class standing..."
+                )}
+              </div>
+
+              <button className="btn btn--primary btn--block" style={{ marginTop: 20 }} onClick={reviewAfterSubmit}>
+                👁 Review Performance Details
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="sidebar">
+          <div className="card" style={{ padding: "16px 14px" }}>
+            <div className="card__head">
+              <span className="eyebrow">Question Palette</span>
+            </div>
+            
+            <div className="palette">
+              {s.currentQuizData.map((_, i) => {
+                let cls = "palette__cell";
+                if (i === s.currentQuestionIndex) cls += " palette__cell--current";
+                
+                const uAns = s.userAnswers[i];
+                const marked = s.markedForReview[i];
+                
+                if (s.quizSubmitted) {
+                  const cIdx = getCorrectIndex(s.currentQuizData[i]);
+                  if (!uAns) cls += " palette__cell--unanswered";
+                  else if (uAns.answer === cIdx) cls += " palette__cell--correct";
+                  else cls += " palette__cell--wrong";
+                } else {
+                  if (uAns) cls += " palette__cell--answered";
+                  else if (marked) cls += " palette__cell--marked";
+                }
+
+                return (
+                  <button
+                    key={i}
+                    className={cls}
+                    onClick={() => gotoQuestion(i)}
+                  >
+                    {i + 1}
+                  </button>
+                );
+              })}
+            </div>
+
+            {!s.quizSubmitted && (
+              <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 10 }}>
+                <button className="btn btn--ghost btn--block" onClick={toggleTimer}>
+                  {s.isTimerPaused ? "▶ Resume Timer" : "⏸ Pause Timer"}
+                </button>
+                <button className="btn btn--success btn--block" onClick={() => submitAll(false)}>
                   Submit Test
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }

@@ -1,9 +1,5 @@
 /* =========================================
-   PRACTICE RUNNER (ported from practice.js:
-   loadPracticeQuiz body, setupPracticeLayout, renderPracticeQuestion,
-   nav, submitPractice, togglePracticeMarkForReview)
-   Scoring (+2 / -0.66), Fisher-Yates partial shuffle, practiceResult
-   write with serverTimestamp, cache invalidation, purple mark styles.
+   PRACTICE RUNNER (ported from practice.js)
    ========================================= */
 import React, { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import firebase, { db, getDb } from "../lib/firebase";
@@ -18,7 +14,6 @@ export default function PracticeRunner() {
     g,
     currentUser,
     viewParams,
-    showHome,
     showDashboard,
     startPracticeSelection,
     bumpHistory,
@@ -33,16 +28,15 @@ export default function PracticeRunner() {
     practiceUserAnswers: {},
     practiceCurrentIndex: 0,
     practiceQuizData: [],
-    resultSummary: null, // computed summary object post-submit
+    resultSummary: null, 
   }).current;
 
   const timerRef = useRef(null);
   const [, forceUpdate] = useReducer((x) => x + 1, 0);
-  const [phase, setPhase] = useState("loading"); // loading | active | error
+  const [phase, setPhase] = useState("loading");
   const [timerDisplay, setTimerDisplay] = useState({ text: "00:00", low: false });
   const submitRef = useRef(() => {});
 
-  /* ---------- startPracticeTimer (verbatim, 1.2 min/q) ---------- */
   const startPracticeTimer = useCallback((limit) => {
     if (timerRef.current) timerRef.current.stop();
     const timeLeft = Math.floor(limit * 1.2 * 60);
@@ -57,7 +51,6 @@ export default function PracticeRunner() {
     timerRef.current.start(timeLeft);
   }, []);
 
-  /* ---------- loadPracticeQuiz body ---------- */
   useEffect(() => {
     g.isPracticeMode = true;
     let cancelled = false;
@@ -67,6 +60,8 @@ export default function PracticeRunner() {
       const chapter = viewParams.chapter;
       const limit = viewParams.limit;
 
+      if (!subject || !chapter) return;
+
       p.practiceSubject = subject;
       p.practiceChapter = chapter === "all" ? "All Topics" : chapter;
       p.practiceQuestionLimit = limit;
@@ -74,12 +69,8 @@ export default function PracticeRunner() {
       p.practiceMarkedForReview = {};
 
       try {
-        const allPracticeData =
-          DataManager.cache.practiceManifest || window.allPracticeData || {};
-        const chapterIds =
-          chapter === "all"
-            ? Object.keys(allPracticeData[subject] || {})
-            : [chapter];
+        const allPracticeData = DataManager.cache.practiceManifest || window.allPracticeData || {};
+        const chapterIds = chapter === "all" ? Object.keys(allPracticeData[subject] || {}) : [chapter];
 
         const promises = chapterIds.map((chapId) => {
           const docId = subject.replace(/\s+/g, "_") + "_" + chapId;
@@ -90,6 +81,12 @@ export default function PracticeRunner() {
         const allQuestions = results.flat();
         if (cancelled) return;
 
+        if (allQuestions.some(q => q === null)) {
+          toastr.error("Failed to load some questions. Check your internet connection.");
+          setPhase("error");
+          return;
+        }
+
         if (allQuestions.length === 0) {
           toastr.error("No questions available.");
           setPhase("error");
@@ -98,492 +95,372 @@ export default function PracticeRunner() {
 
         const randomized = [...allQuestions];
         const fetchLimit = Math.min(limit, randomized.length);
-        for (let i = 0; i < fetchLimit; i++) {
-          const j = i + Math.floor(Math.random() * (randomized.length - i));
-          const temp = randomized[i];
-          randomized[i] = randomized[j];
-          randomized[j] = temp;
+        
+        for (let i = randomized.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [randomized[i], randomized[j]] = [randomized[j], randomized[i]];
         }
+        
         p.practiceQuizData = randomized.slice(0, fetchLimit);
         p.practiceCurrentIndex = 0;
         p.practiceUserAnswers = {};
+        p.resultSummary = null;
 
         setPhase("active");
-        startPracticeTimer(limit);
-        forceUpdate();
-      } catch (error) {
-        console.error("Fetch Error:", error);
-        toastr.error("Failed to load questions.");
-        if (!cancelled) setPhase("error");
+        startPracticeTimer(fetchLimit);
+      } catch (e) {
+        console.error(e);
+        toastr.error("Failed to load practice mode.");
+        setPhase("error");
       }
     }
-
     run();
     return () => {
       cancelled = true;
-      if (timerRef.current) timerRef.current.stop();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [viewParams, g, p, startPracticeTimer]);
 
-  /* ---------- Navigation (verbatim) ---------- */
-  const navPractice = (dir) => {
-    const next = p.practiceCurrentIndex + dir;
-    if (next >= 0 && next < p.practiceQuizData.length) {
-      p.practiceCurrentIndex = next;
+  const exitPractice = () => {
+    if (timerRef.current) timerRef.current.stop();
+    g.isPracticeMode = false;
+    startPracticeSelection();
+  };
+
+  const nav = (step) => {
+    const n = p.practiceCurrentIndex + step;
+    if (n >= 0 && n < p.practiceQuizData.length) {
+      p.practiceCurrentIndex = n;
       forceUpdate();
     }
   };
 
-  const jumpTo = (i) => {
-    p.practiceCurrentIndex = i;
-    forceUpdate();
-  };
-
-  const clearPracticeSelection = () => {
-    if (p.practiceSubmitted) return;
-    delete p.practiceUserAnswers[p.practiceCurrentIndex];
+  const gotoQuestion = (idx) => {
+    p.practiceCurrentIndex = idx;
     forceUpdate();
   };
 
   const selectAnswer = (idx) => {
     if (p.practiceSubmitted) return;
-    if (!p.practiceUserAnswers[p.practiceCurrentIndex])
-      p.practiceUserAnswers[p.practiceCurrentIndex] = {};
-    p.practiceUserAnswers[p.practiceCurrentIndex].answer = idx;
+    if (!p.practiceUserAnswers[p.practiceCurrentIndex]) {
+      p.practiceUserAnswers[p.practiceCurrentIndex] = { answer: idx, surety: 100 };
+    } else {
+      p.practiceUserAnswers[p.practiceCurrentIndex].answer = idx;
+    }
     forceUpdate();
   };
 
   const selectSurety = (val) => {
     if (p.practiceSubmitted) return;
-    if (!p.practiceUserAnswers[p.practiceCurrentIndex])
-      p.practiceUserAnswers[p.practiceCurrentIndex] = { answer: -1 };
+    if (!p.practiceUserAnswers[p.practiceCurrentIndex]) return;
     p.practiceUserAnswers[p.practiceCurrentIndex].surety = val;
     forceUpdate();
   };
 
-  const togglePracticeMarkForReview = () => {
+  const clearSelection = () => {
+    if (p.practiceSubmitted) return;
+    delete p.practiceUserAnswers[p.practiceCurrentIndex];
+    forceUpdate();
+  };
+
+  const toggleMarkForReview = () => {
     if (p.practiceSubmitted) return;
     if (p.practiceMarkedForReview[p.practiceCurrentIndex]) {
       delete p.practiceMarkedForReview[p.practiceCurrentIndex];
-      toastr.info("Removed from Review");
     } else {
       p.practiceMarkedForReview[p.practiceCurrentIndex] = true;
-      toastr.success("Marked for Review");
     }
     forceUpdate();
   };
 
-  /* ---------- submitPractice (verbatim scoring + Firestore) ---------- */
   const submitPractice = useCallback(
     (forceSubmit = false) => {
-      if (!forceSubmit && !window.confirm("Finish this practice session?")) return;
+      if (!forceSubmit && !window.confirm("Are you sure you want to end this practice session?")) return;
 
       if (timerRef.current) timerRef.current.stop();
       p.practiceSubmitted = true;
 
-      let score = 0;
-      let correct = 0,
-        incorrect = 0,
-        unattempted = 0;
+      let score = 0, correct = 0, incorrect = 0, unattempted = 0;
+      const totalQ = p.practiceQuizData.length;
 
       p.practiceQuizData.forEach((q, i) => {
         const uAns = p.practiceUserAnswers[i];
         const cIdx = getCorrectIndex(q);
-        if (uAns && uAns.answer !== undefined && uAns.answer !== -1) {
+
+        if (uAns) {
           const isCorrect = uAns.answer === cIdx;
           p.practiceUserAnswers[i].isCorrect = isCorrect;
-          if (isCorrect) {
-            score += 2;
-            correct++;
-          } else {
-            score -= 0.66;
-            incorrect++;
-          }
+          if (isCorrect) { score += 2; correct++; }
+          else { score -= 0.66; incorrect++; }
         } else {
           unattempted++;
         }
       });
 
-      const totalQuestions = p.practiceQuizData.length;
-      const totalPossibleMarks = totalQuestions * 2;
-      const accuracy = ((correct / (correct + incorrect)) * 100 || 0).toFixed(1);
-      const negativeLoss = incorrect * 0.66;
-      const positiveGain = correct * 2;
-      const negativeDrain = positiveGain
-        ? ((negativeLoss / positiveGain) * 100).toFixed(1)
-        : 0;
+      const finalScore = parseFloat(score.toFixed(2));
+      const totalMarks = totalQ * 2;
+      const percentage = totalMarks > 0 ? ((finalScore / totalMarks) * 100).toFixed(1) : 0;
+      const now = new Date();
+
+      const practiceResult = {
+        userId: currentUser ? currentUser.uid : "guest",
+        userEmail: currentUser ? currentUser.email : "guest",
+        subject: p.practiceSubject,
+        chapterId: `practice_${p.practiceChapter.replace(/\s+/g, "_")}_${Date.now()}`,
+        chapterName: `Practice: ${p.practiceChapter} (${totalQ} Qs)`,
+        score: finalScore,
+        totalMarks: totalMarks,
+        scorePercent: parseFloat(percentage),
+        userAnswers: p.practiceUserAnswers,
+        timestamp: now,
+      };
+
+      p.resultSummary = { correct, incorrect, unattempted, finalScore, totalMarks, percentage };
+      forceUpdate();
 
       if (currentUser) {
-        const resultData = {
-          userId: currentUser.uid,
-          timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-          subject: p.practiceSubject,
-          chapterName: p.practiceChapter,
-          chapterId: "practice_session",
-          scorePercent: parseFloat(accuracy),
-          totalMarks: totalPossibleMarks,
-          userAnswers: p.practiceUserAnswers,
-          correctCount: correct,
-          incorrectCount: incorrect,
-          unattemptedCount: unattempted,
-        };
-
-        getDb()
-          .collection("practiceResult")
-          .add(resultData)
-          .then(async (docRef) => {
-            toastr.success("Practice result saved!");
-            g.practiceHistory.unshift({
-              id: docRef.id,
-              ...resultData,
-              timestamp: new Date(),
-            });
-            bumpHistory();
-            await DataManager.invalidateCache(
-              `user_practice_history_${currentUser.uid}`
-            );
+        db.collection("practice_results")
+          .add({
+            ...practiceResult,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
           })
-          .catch((error) => {
-            console.error("Error saving practice result:", error);
-            toastr.error("Failed to save result.");
-          });
+          .then(() => {
+            toastr.success("Practice result saved!");
+            g.practiceHistory.unshift({ ...practiceResult, timestamp: now });
+            if (g.practiceHistory.length > 20) g.practiceHistory.pop();
+            g.dashboardDataLoaded = true;
+            bumpHistory();
+            DataManager.invalidateCache(`practice_history_${currentUser.uid}`);
+          })
+          .catch((e) => console.error("Error saving practice:", e));
+      } else {
+        toastr.info("Logged out. Result not saved.");
       }
-
-      p.resultSummary = {
-        score,
-        totalPossibleMarks,
-        accuracy,
-        negativeDrain,
-        correct,
-        incorrect,
-        unattempted,
-      };
-      forceUpdate();
     },
-    [currentUser, g, bumpHistory, p]
+    [p, currentUser, g, bumpHistory]
   );
   submitRef.current = submitPractice;
 
-  /* ---------- exitQuiz for practice → startPracticeSelection ---------- */
-  const exitQuiz = () => {
-    if (timerRef.current) timerRef.current.stop();
-    startPracticeSelection();
-  };
-
-  /* =========================================
-     RENDER
-     ========================================= */
   if (phase === "loading") {
     return (
-      <section className="quiz-section py-5">
-        <div className="container">
-          <div className="d-flex justify-content-between mb-4">
-            <button className="btn btn-primary-custom px-4 shadow" onClick={exitQuiz}>
-              ← Exit
-            </button>
-          </div>
-          <div className="text-center py-5">
-            <div className="spinner-border text-info" role="status"></div>
-            <p className="mt-2 text-muted">Optimizing your session...</p>
-          </div>
-        </div>
-      </section>
+      <div className="page empty">
+        <div className="spinner"></div>
+        <p style={{ marginTop: 14 }}>Loading Practice Session...</p>
+      </div>
     );
   }
 
   if (phase === "error") {
     return (
-      <section className="quiz-section py-5">
-        <div className="container">
-          <div className="d-flex justify-content-between mb-4">
-            <button className="btn btn-primary-custom px-4 shadow" onClick={exitQuiz}>
-              ← Exit
-            </button>
-          </div>
-          <div className="alert alert-warning text-center">
-            No questions available for this selection.
-          </div>
-        </div>
-      </section>
+      <div className="page empty">
+        <div className="empty__icon">⚠️</div>
+        <h3>Session Failed</h3>
+        <button className="btn btn--ghost" onClick={exitPractice} style={{ marginTop: 14 }}>
+          ← Back
+        </button>
+      </div>
     );
   }
 
-  const q = p.practiceQuizData[p.practiceCurrentIndex];
-  const cIdx = getCorrectIndex(q);
-  const currentAnswer = p.practiceUserAnswers[p.practiceCurrentIndex];
-  const currentSurety = currentAnswer?.surety;
-  const isMarked = p.practiceMarkedForReview[p.practiceCurrentIndex];
-  const submitted = p.practiceSubmitted;
+  const question = p.practiceQuizData[p.practiceCurrentIndex];
+  if (!question) return null;
+  const correctIndex = getCorrectIndex(question);
+  const uAnsCurrent = p.practiceUserAnswers[p.practiceCurrentIndex];
+  const currentSurety = uAnsCurrent?.surety;
+  const isMarked = !!p.practiceMarkedForReview[p.practiceCurrentIndex];
 
   return (
-    <section className="quiz-section py-5">
-      <div className="container">
-        <div className="d-flex justify-content-between mb-4">
-          <button className="btn btn-primary-custom px-4 shadow" onClick={exitQuiz}>
-            ← Exit
-          </button>
+    <div className="runner">
+      <div className="runner__bar">
+        <button className="btn btn--ghost" onClick={exitPractice}>← Exit Practice</button>
+        <h4 style={{ margin: 0, color: "var(--ink-soft)" }}>Practice: {p.practiceChapter}</h4>
+        <div className={`timer-pill ${timerDisplay.low ? "timer-pill--low" : ""}`}>
+          ⏳ {timerDisplay.text || "00:00"}
         </div>
-        <div className="row">
-          {/* Main content */}
-          <div className="col-lg-8 mb-4">
-            <div className="quiz-box h-100">
-              <div id="quiz-content">
-                <div className="d-flex justify-content-between align-items-center mb-4">
-                  <h4 className="fw-bold text-info m-0">{p.practiceChapter}</h4>
-                  {!submitted && (
-                    <button
-                      className="btn btn-outline-secondary btn-sm fw-bold shadow-sm"
-                      style={{
-                        backgroundColor: isMarked ? "#7e22ce" : "transparent",
-                        color: isMarked ? "#ffffff" : "#7e22ce",
-                      }}
-                      onClick={togglePracticeMarkForReview}
-                    >
-                      <i className={`bi ${isMarked ? "bi-bookmark-fill" : "bi-bookmark"}`}></i>{" "}
-                      {isMarked ? "Unmark Review" : "Mark for Review"}
-                    </button>
-                  )}
-                </div>
+      </div>
 
-                {/* Result summary */}
-                {p.resultSummary && (
-                  <div className="mb-4">
-                    <PracticeResultCard summary={p.resultSummary} />
-                  </div>
-                )}
-
-                {/* Question */}
-                <div id="practice-question-container">
-                  <div className="question">
-                    <div
-                      className="mb-3 lead fw-bold"
-                      dangerouslySetInnerHTML={{
-                        __html: `Q${p.practiceCurrentIndex + 1}. ${TextFormatter.formatQuestionText(
-                          q.text
-                        )}`,
-                      }}
-                    ></div>
-                    <div id="practice-options">
-                      {q.options.map((opt, idx) => {
-                        const isSelected = currentAnswer?.answer === idx;
-                        let cls = "option shadow-sm";
-                        if (submitted) {
-                          if (idx === cIdx) cls += " correct-answer-label";
-                          if (isSelected && idx !== cIdx) cls += " incorrect-answer-label";
-                        }
-                        return (
-                          <label key={idx} className={cls}>
-                            <input
-                              type="radio"
-                              name="pQ"
-                              value={idx}
-                              checked={isSelected || false}
-                              disabled={submitted}
-                              onChange={() => selectAnswer(idx)}
-                            />
-                            <span>{opt}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-
-                    <div className="mt-4 mb-2 animate-fade-in">
-                      <div className="surety-label">Confidence Level</div>
-                      <div
-                        className="surety-matrix shadow-sm"
-                        role="radiogroup"
-                        aria-label="Confidence Level"
-                      >
-                        {[100, 75, 50, 0].map((val) => (
-                          <div
-                            key={val}
-                            className={`surety-opt surety-${val} ${
-                              currentSurety === val ? "selected" : ""
-                            }`}
-                            role="radio"
-                            tabIndex={0}
-                            aria-checked={currentSurety === val}
-                            aria-label={`${val}% Confidence`}
-                            onClick={() => selectSurety(val)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                selectSurety(val);
-                              }
-                            }}
-                          >
-                            {val}%
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {submitted && q.explanation && (
-                      <div
-                        className="explanation shadow-sm mt-3 animate-fade-in"
-                        dangerouslySetInnerHTML={{
-                          __html: `<strong> Explanation:</strong> <br>${q.explanation}`,
-                        }}
-                      ></div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="d-flex justify-content-between mt-4">
-                  <button
-                    className="btn btn-secondary-custom px-4"
-                    onClick={() => navPractice(-1)}
-                  >
-                    Previous
-                  </button>
-                  <button
-                    className="btn btn-outline-secondary px-4"
-                    disabled={submitted}
-                    onClick={clearPracticeSelection}
-                  >
-                    Clear
-                  </button>
-                  <button
-                    className="btn btn-secondary-custom px-4"
-                    onClick={() => navPractice(1)}
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            </div>
+      <div className="runner__grid">
+        <div className="card" style={{ padding: "24px 28px" }}>
+          <div className="card__head">
+            <h2 className="card__title">Question {p.practiceCurrentIndex + 1}</h2>
+            <button
+              className={`btn btn--sm ${isMarked ? "btn--subtle" : "btn--ghost"}`}
+              onClick={toggleMarkForReview}
+            >
+              {isMarked ? "★ Unmark" : "☆ Mark for Review"}
+            </button>
           </div>
 
-          {/* Sidebar palette */}
-          <div className="col-lg-4">
-            <div className="quiz-nav-sidebar" id="quiz-nav">
-              <div className="nav-header">Question Palette</div>
-              <div className="timer-container shadow-sm border-info">
-                <span className="timer-label">Time Remaining</span>
-                <div className={`timer-value ${timerDisplay.low ? "text-danger" : ""}`}>
-                  {timerDisplay.text}
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 500, marginBottom: 24, lineHeight: 1.6 }}>
+              <span dangerouslySetInnerHTML={{ __html: TextFormatter.formatQuestionText(question.text) }} />
+            </div>
+
+            <div className="grid">
+              {question.options.map((opt, idx) => {
+                const isSelected = uAnsCurrent && uAnsCurrent.answer === idx;
+                let optionClass = "option";
+                let omrClass = "omr";
+
+                if (p.practiceSubmitted) {
+                  if (idx === correctIndex) {
+                    optionClass += " option--correct";
+                    omrClass += " omr--correct";
+                  } else if (isSelected && idx !== correctIndex) {
+                    optionClass += " option--wrong";
+                    omrClass += " omr--wrong";
+                  }
+                } else if (isSelected) {
+                  optionClass += " option--selected";
+                  omrClass += " omr--filled";
+                }
+
+                const labelMap = ["A", "B", "C", "D"];
+
+                return (
+                  <button
+                    key={idx}
+                    className={optionClass}
+                    disabled={p.practiceSubmitted}
+                    onClick={() => { if (!p.practiceSubmitted) selectAnswer(idx); }}
+                  >
+                    <div className={omrClass}>{labelMap[idx]}</div>
+                    <div className="option__text" dangerouslySetInnerHTML={{ __html: opt }} />
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ marginTop: 24 }}>
+              <span className="eyebrow" style={{ display: "block", marginBottom: 8 }}>Confidence Level</span>
+              <div className="confidence">
+                {[100, 75, 50, 0].map((val) => (
+                  <button
+                    key={val}
+                    className={`confidence__chip ${currentSurety === val ? "confidence__chip--on" : ""}`}
+                    disabled={p.practiceSubmitted}
+                    onClick={() => { if (!p.practiceSubmitted) selectSurety(val); }}
+                  >
+                    {val}% Confidence
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {p.practiceSubmitted && question.explanation && (
+              <div className="explanation" style={{ marginTop: 24 }}>
+                <strong style={{ display: "block", marginBottom: 4 }}>💡 Explanation:</strong>
+                <span dangerouslySetInnerHTML={{ __html: question.explanation }} />
+              </div>
+            )}
+          </div>
+
+          <div className="runner__nav">
+            <button
+              className="btn btn--ghost"
+              disabled={p.practiceCurrentIndex === 0}
+              onClick={() => nav(-1)}
+            >
+              Previous
+            </button>
+            <button
+              className="btn btn--ghost"
+              disabled={p.practiceSubmitted}
+              onClick={clearSelection}
+            >
+              Clear
+            </button>
+            <button
+              className="btn btn--ghost"
+              disabled={p.practiceCurrentIndex === p.practiceQuizData.length - 1}
+              onClick={() => nav(1)}
+            >
+              Next
+            </button>
+          </div>
+
+          {p.resultSummary && (
+            <div style={{ marginTop: 30, borderTop: "1px dashed var(--line)", paddingTop: 30 }}>
+              <div className="score-strip">
+                <div className="score-strip__big">Score: {p.resultSummary.finalScore}</div>
+                <div>
+                  <div style={{ color: "var(--ink-soft)", fontSize: 13 }}>Total Marks</div>
+                  <div style={{ fontWeight: 600 }}>{p.resultSummary.totalMarks}</div>
+                </div>
+                <div>
+                  <div style={{ color: "var(--ink-soft)", fontSize: 13 }}>Accuracy</div>
+                  <div style={{ fontWeight: 600 }}>{p.resultSummary.percentage}%</div>
                 </div>
               </div>
-              <div id="practice-nav-container" className="nav-grid">
-                {p.practiceQuizData.map((_, i) => {
-                  const uAns = p.practiceUserAnswers[i];
-                  const marked = p.practiceMarkedForReview[i];
-                  let cls = "nav-item shadow-sm";
-                  if (i === p.practiceCurrentIndex) cls += " active";
-                  if (submitted) {
-                    const qq = p.practiceQuizData[i];
-                    const cc = getCorrectIndex(qq);
-                    if (!uAns || uAns.answer === undefined || uAns.answer === -1)
-                      cls += " unattempted";
-                    else if (uAns.answer === cc) cls += " correct-nav";
-                    else cls += " incorrect-nav";
-                  } else {
-                    if (uAns && uAns.answer !== undefined && uAns.answer !== -1)
-                      cls += " attempted";
-                    if (marked) cls += " marked-nav";
-                  }
-                  return (
-                    <div
-                      key={i}
-                      className={cls}
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`Question ${i + 1}`}
-                      onClick={() => jumpTo(i)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          jumpTo(i);
-                        }
-                      }}
-                    >
-                      {i + 1}
-                    </div>
-                  );
-                })}
+
+              <div className="stats-grid">
+                <Stat variant="leaf" label="Correct" value={p.resultSummary.correct} />
+                <Stat variant="stamp" label="Incorrect" value={p.resultSummary.incorrect} />
+                <Stat label="Unattempted" value={p.resultSummary.unattempted} />
               </div>
-              {!submitted && (
-                <button
-                  className="btn btn-secondary-custom w-100 mt-4 rounded-pill py-2 fw-bold text-white"
-                  onClick={() => submitPractice(false)}
-                >
-                  Finish Practice
-                </button>
-              )}
+
+              <button className="btn btn--primary btn--block" style={{ marginTop: 20 }} onClick={exitPractice}>
+                Finish Session
+              </button>
             </div>
+          )}
+        </div>
+
+        <div className="sidebar">
+          <div className="card" style={{ padding: "16px 14px" }}>
+            <div className="card__head">
+              <span className="eyebrow">Question Palette</span>
+            </div>
+            
+            <div className="palette">
+              {p.practiceQuizData.map((_, i) => {
+                let cls = "palette__cell";
+                if (i === p.practiceCurrentIndex) cls += " palette__cell--current";
+                
+                const uAns = p.practiceUserAnswers[i];
+                const marked = p.practiceMarkedForReview[i];
+                
+                if (p.practiceSubmitted) {
+                  const cIdx = getCorrectIndex(p.practiceQuizData[i]);
+                  if (!uAns) cls += " palette__cell--unanswered";
+                  else if (uAns.answer === cIdx) cls += " palette__cell--correct";
+                  else cls += " palette__cell--wrong";
+                } else {
+                  if (uAns) cls += " palette__cell--answered";
+                  else if (marked) cls += " palette__cell--marked";
+                }
+
+                return (
+                  <button
+                    key={i}
+                    className={cls}
+                    onClick={() => gotoQuestion(i)}
+                  >
+                    {i + 1}
+                  </button>
+                );
+              })}
+            </div>
+
+            {!p.practiceSubmitted && (
+              <div style={{ marginTop: 24 }}>
+                <button className="btn btn--success btn--block" onClick={() => submitPractice(false)}>
+                  End Practice
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 
-/* ---------- Practice result summary card (verbatim markup) ---------- */
-function PracticeResultCard({ summary }) {
-  const { score, totalPossibleMarks, accuracy, negativeDrain, correct, incorrect, unattempted } =
-    summary;
+function Stat({ variant, label, value }) {
+  const vClass = variant ? `stat--${variant}` : "";
   return (
-    <div className="card border-0 shadow-sm rounded-4 p-4 text-center animate-fade-in mb-4">
-      <h4 className="fw-bold text-primary mb-3">Practice Result</h4>
-      <div className="row g-2 mb-3">
-        <div className="col-12 col-md-4">
-          <div className="p-2 bg-primary text-white rounded shadow-sm">
-            <small
-              className="text-white-50 d-block text-uppercase fw-bold"
-              style={{ fontSize: "0.7rem" }}
-            >
-              Total Score
-            </small>
-            <h3 className="fw-bold m-0">
-              {score.toFixed(2)}{" "}
-              <span className="fs-6 text-white-50">/ {totalPossibleMarks}</span>
-            </h3>
-          </div>
-        </div>
-        <div className="col-6 col-md-4">
-          <div className="p-2 bg-light rounded shadow-sm border-start border-4 border-success">
-            <small
-              className="text-muted d-block text-uppercase fw-bold"
-              style={{ fontSize: "0.7rem" }}
-            >
-              Accuracy
-            </small>
-            <h4 className="fw-bold m-0 text-success">{accuracy}%</h4>
-          </div>
-        </div>
-        <div className="col-6 col-md-4">
-          <div className="p-2 bg-light rounded shadow-sm border-start border-4 border-danger">
-            <small
-              className="text-muted d-block text-uppercase fw-bold"
-              style={{ fontSize: "0.7rem" }}
-            >
-              Neg. Drain
-            </small>
-            <h4 className="fw-bold m-0 text-danger">{negativeDrain}%</h4>
-          </div>
-        </div>
-      </div>
-      <div className="row g-2">
-        <div className="col-4">
-          <div className="p-2 bg-light rounded">
-            <small className="text-muted d-block">Correct</small>
-            <span className="fw-bold text-success">{correct}</span>
-          </div>
-        </div>
-        <div className="col-4">
-          <div className="p-2 bg-light rounded">
-            <small className="text-muted d-block">Incorrect</small>
-            <span className="fw-bold text-danger">{incorrect}</span>
-          </div>
-        </div>
-        <div className="col-4">
-          <div className="p-2 bg-light rounded">
-            <small className="text-muted d-block">Skipped</small>
-            <span className="fw-bold text-secondary">{unattempted}</span>
-          </div>
-        </div>
-      </div>
+    <div className={`stat ${vClass}`}>
+      <span className="eyebrow">{label}</span>
+      <span className="stat__value">{value}</span>
     </div>
   );
 }
