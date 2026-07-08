@@ -1,0 +1,1099 @@
+:root {
+    /* ============================
+       THEME SYSTEM (Light Mode Default)
+       ============================ */
+    --bg-body: #eff6ff;         /* Matches original --bg-light */
+    --bg-card: #ffffff;
+    --text-main: #1f2937;       /* Matches original --text-color */
+    --text-muted: #6b7280;
+    --border-color: #e5e7eb;
+    --navbar-bg: #1e3a8a;
+    --navbar-gradient: linear-gradient(160deg, #1e3a8a 0%, #172554 100%);
+    --input-bg: #f9fafb;
+    --option-bg: #ffffff;
+    --option-hover: #eff6ff;
+
+    /* Original Palette (Royal Navy & Gold) */
+    --primary-color: #1e3a8a;
+    --secondary-color: #3b82f6;
+    --accent-color: #f59e0b;
+
+    /* Shadows */
+    --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --hover-shadow: 0 20px 25px -5px rgba(30, 58, 138, 0.15), 0 10px 10px -5px rgba(30, 58, 138, 0.04);
+}
+
+[data-theme="dark"] {
+    --bg-body: #0f172a;
+    --bg-card: #1e293b;
+    --text-main: #f3f4f6;
+    --text-muted: #9ca3af;
+    --border-color: #334155;
+    --navbar-bg: #0f172a;
+    --navbar-gradient: linear-gradient(160deg, #0f172a 0%, #020617 100%);
+    --input-bg: #1e293b;
+    --option-bg: #1e293b;
+    --option-hover: #334155;
+    --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --hover-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
+}
+
+/* --- Bootstrap Overrides --- */
+[data-theme="dark"] .bg-white { background-color: var(--bg-card) !important; }
+[data-theme="dark"] .text-dark, [data-theme="dark"] .card-title { color: var(--text-main) !important; }
+[data-theme="dark"] .text-muted { color: var(--text-muted) !important; }
+[data-theme="dark"] .border { border-color: var(--border-color) !important; }
+[data-theme="dark"] .dropdown-menu { background-color: var(--bg-card); border: 1px solid var(--border-color); }
+[data-theme="dark"] .dropdown-item { color: var(--text-main); }
+[data-theme="dark"] .dropdown-item:hover { background-color: var(--option-hover); }
+
+
+[data-theme="dark"] .bg-white,
+[data-theme="dark"] .card,
+[data-theme="dark"] .bg-light {
+    background-color: var(--bg-card) !important;
+    color: var(--text-main) !important;
+}
+
+[data-theme="dark"] .text-dark,
+[data-theme="dark"] .text-secondary:not(.badge),
+[data-theme="dark"] .card-title,
+[data-theme="dark"] .form-label {
+    color: var(--text-main) !important;
+}
+
+[data-theme="dark"] .text-muted {
+    color: var(--text-muted) !important;
+}
+
+[data-theme="dark"] .border,
+[data-theme="dark"] .border-bottom,
+[data-theme="dark"] .border-start {
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .table {
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--text-main);
+    border-color: var(--border-color);
+}
+
+/* ============================================================
+   FIX: Component Specific Visibility
+   ============================================================ */
+
+/* Surety Matrix - Better visibility in dark mode */
+[data-theme="dark"] .surety-matrix {
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .surety-opt {
+    border-right: 1px solid var(--border-color);
+    background-color: transparent;
+}
+
+[data-theme="dark"] .surety-100 { background-color: rgba(22, 101, 52, 0.3); color: #86efac; }
+[data-theme="dark"] .surety-75  { background-color: rgba(153, 27, 27, 0.3); color: #fca5a5; }
+[data-theme="dark"] .surety-50  { background-color: rgba(161, 98, 7, 0.3); color: #fde047; }
+[data-theme="dark"] .surety-0   { background-color: rgba(30, 58, 138, 0.3); color: #93c5fd; }
+
+[data-theme="dark"] .surety-opt.selected {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .surety-100.selected { background-color: #166534 !important; color: #ffffff !important; }
+[data-theme="dark"] .surety-75.selected  { background-color: #991b1b !important; color: #ffffff !important; }
+[data-theme="dark"] .surety-50.selected  { background-color: #a16207 !important; color: #ffffff !important; }
+[data-theme="dark"] .surety-0.selected   { background-color: #1e3a8a !important; color: #ffffff !important; }
+
+/* Question Palette */
+[data-theme="dark"] .nav-item {
+    background-color: var(--input-bg);
+    color: var(--text-muted);
+}
+
+/* Explanation Box */
+[data-theme="dark"] .explanation {
+    background-color: rgba(245, 158, 11, 0.05);
+    border-left: 4px solid var(--accent-color);
+    color: var(--text-main);
+}
+
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: var(--bg-body);
+    color: var(--text-main);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.main-navbar { background: var(--navbar-gradient); box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+.hero { background-color: var(--bg-body); background-image: radial-gradient(var(--secondary-color) 0.5px, transparent 0.5px); background-size: 20px 20px; }
+.auth-card { border: 1px solid var(--border-color); border-radius: 20px; background: var(--bg-card); box-shadow: var(--card-shadow); }
+
+.btn-primary-custom { background: linear-gradient(to right, #f59e0b, #d97706); border: none; color: white; font-weight: 600; text-transform: uppercase; border-radius: 8px; }
+.btn-secondary-custom { background: linear-gradient(to right, #1454dd, #1e40af); border: none; color: white; font-weight: 600; text-transform: uppercase; border-radius: 8px; }
+
+.quiz-box, .quiz-nav-sidebar, .topic-card, .chapter-card {
+    background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: var(--card-shadow);
+}
+
+.option {
+    cursor: pointer; padding: 1rem 1.25rem; margin-bottom: 1rem; background-color: var(--option-bg);
+    border: 2px solid var(--border-color); border-radius: 8px; color: var(--text-main); transition: 0.2s;
+}
+.option:hover { background-color: var(--option-hover); border-color: var(--secondary-color); }
+
+.nav-item { background-color: var(--input-bg); color: var(--text-muted); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; border-radius: 6px; aspect-ratio: 1; cursor: pointer; }
+.nav-item.active { background-color: var(--primary-color); color: white; }
+.nav-item.attempted { background-color: var(--accent-color); color: white; }
+
+.form-control { background-color: var(--input-bg); border-color: var(--border-color); color: var(--text-main); }
+.form-control:focus { background-color: var(--input-bg); color: var(--text-main); border-color: var(--secondary-color); box-shadow: none; }
+
+/* ============================
+   DARK MODE OVERRIDES
+   ============================ */
+[data-theme="dark"] {
+    --bg-body: #0f172a;         /* Deep dark blue/slate */
+    --bg-card: #1e293b;         /* Darker slate for cards */
+    --text-main: #f3f4f6;       /* Light gray text */
+    --text-muted: #9ca3af;
+    --border-color: #374151;
+    --navbar-bg: #0f172a;
+    --navbar-gradient: linear-gradient(160deg, #0f172a 0%, #020617 100%);
+    --input-bg: #334155;
+    --option-bg: #1e293b;
+    --option-hover: #334155;
+
+    --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+    --hover-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: var(--bg-body);
+    color: var(--text-main);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ============================
+   NAVBAR
+   ============================ */
+.main-navbar {
+    background: var(--navbar-bg);
+    background: var(--navbar-gradient);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+}
+
+.navbar-brand {
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #fff !important;
+}
+
+/* ============================
+   LANDING PAGE (AUTH)
+   ============================ */
+.hero {
+    background-color: var(--bg-body);
+    /* Pattern opacity tweaked for dark mode support */
+    background-image: radial-gradient(var(--secondary-color) 0.5px, transparent 0.5px), radial-gradient(var(--secondary-color) 0.5px, transparent 0.5px);
+    background-size: 20px 20px;
+    background-position: 0 0, 10px 10px;
+}
+
+.auth-card {
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    background: var(--bg-card); /* Changed from rgba(255,255,255,0.9) */
+    backdrop-filter: blur(12px);
+    box-shadow: var(--card-shadow);
+}
+
+/* ============================
+   DASHBOARD TABS
+   ============================ */
+.nav-pills {
+    background: var(--bg-card);
+    padding: 0.5rem;
+    border-radius: 50px;
+    display: inline-flex;
+    box-shadow: var(--card-shadow);
+    gap: 0.5rem;
+    border: 1px solid var(--border-color);
+}
+
+.nav-pills .nav-link {
+    color: var(--text-main);
+    border-radius: 50px;
+    padding: 10px 25px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.nav-pills .nav-link:hover {
+    background-color: var(--option-hover);
+    color: var(--primary-color);
+}
+
+.nav-pills .nav-link.active {
+    background-color: var(--primary-color);
+    color: #fff;
+    box-shadow: 0 4px 10px rgba(30, 58, 138, 0.3);
+}
+
+/* ============================
+   BUTTONS
+   ============================ */
+.btn-primary-custom {
+    background: linear-gradient(to right, #f59e0b, #d97706);
+    border: none;
+    color: white;
+    border-radius: 8px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+}
+
+.btn-primary-custom:hover {
+    background: linear-gradient(to right, #d97706, #b45309);
+    transform: translateY(-2px);
+    color: white;
+    box-shadow: 0 10px 15px -3px rgba(245, 158, 11, 0.3);
+}
+
+/* New Secondary Button (Blue/Indigo) - Matches the Navbar/Titles */
+.btn-secondary-custom {
+    background: linear-gradient(to right, #1454dd, #1e40af);
+    border: none;
+    color: white;
+    border-radius: 8px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+}
+
+.btn-secondary-custom:hover {
+    background: linear-gradient(to right, #1e40af, #1e3a8a);
+    transform: translateY(-2px);
+    color: white;
+    box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
+}
+
+.btn-success-custom {
+    background: linear-gradient(to right, #059669, #047857);
+    border: none;
+    color: white;
+    border-radius: 8px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.3);
+}
+
+.btn-success-custom:hover {
+    background: linear-gradient(to right, #06694a, #037958);
+    transform: translateY(-2px);
+    color: white;
+    box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3);
+}
+
+/* ============================
+   QUIZ FEEDBACK & COLORS
+   ============================ */
+.correct-answer-label {
+    background-color: #064e3b !important; /* Dark Green for dark mode compat */
+    border: 2px solid #16a34a !important;
+    color: #86efac !important;
+}
+
+/* Light mode override for correct answer to keep original look */
+[data-theme="light"] .correct-answer-label {
+    background-color: #f0fdf4 !important;
+    border-color: #16a34a !important;
+    color: #14532d !important;
+}
+
+.incorrect-answer-label {
+    background-color: #7f1d1d !important; /* Dark Red */
+    border: 2px solid #dc2626 !important;
+    color: #fca5a5 !important;
+}
+
+/* Light mode override for incorrect */
+[data-theme="light"] .incorrect-answer-label {
+    background-color: #fef2f2 !important;
+    border-color: #dc2626 !important;
+    color: #7f1d1d !important;
+}
+
+.explanation {
+    margin-top: 20px;
+    padding: 20px;
+    background-color: var(--input-bg);
+    border-left: 4px solid var(--accent-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    font-size: 0.95rem;
+    color: var(--text-main);
+}
+
+/* ============================
+   CARDS
+   ============================ */
+.topic-card, .chapter-card {
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--bg-card);
+    box-shadow: var(--card-shadow);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.topic-card .card-title, .chapter-card .card-title {
+    color: var(--text-main) !important;
+}
+.topic-card .text-muted, .chapter-card .text-muted {
+    color: var(--text-muted) !important;
+}
+
+.topic-card:hover, .chapter-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--hover-shadow);
+    border-color: var(--secondary-color);
+}
+
+.history-card {
+    border: 1px solid var(--border-color); /* Added border for dark mode visibility */
+    border-left: 5px solid transparent; /* Keep logic */
+    border-radius: 12px;
+    background: var(--bg-card);
+    box-shadow: var(--card-shadow);
+    transition: all 0.3s ease;
+}
+
+.history-card h6 { color: var(--text-main); }
+.history-card .text-muted { color: var(--text-muted) !important; }
+
+.history-card:hover {
+    box-shadow: var(--hover-shadow);
+    transform: translateY(-2px);
+}
+
+.history-card.high-score { border-left-color: #10b981; }
+.history-card.avg-score { border-left-color: #f59e0b; }
+.history-card.low-score { border-left-color: #ef4444; }
+
+/* ============================
+   QUIZ LAYOUT
+   ============================ */
+.quiz-box {
+    background: var(--bg-card);
+    padding: 2.5rem;
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+    border-top: 5px solid var(--primary-color);
+}
+
+.quiz-nav-sidebar {
+    background: var(--bg-card);
+    padding: 1.5rem;
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+    position: sticky;
+    top: 2rem;
+    border: 1px solid var(--border-color);
+}
+
+.nav-header {
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--text-main);
+    margin-bottom: 1.5rem;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 10px;
+}
+
+/* Grid for Quiz Navigation Numbers */
+.nav-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    justify-items: center;
+}
+
+.nav-item {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    aspect-ratio: 1;
+    max-width: 50px;
+    background-color: var(--input-bg);
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    transition: all 0.2s ease;
+}
+
+.nav-item:hover {
+    background-color: var(--option-hover);
+    color: var(--primary-color);
+    border-color: var(--secondary-color);
+}
+
+/* Quiz Nav States */
+.nav-item.active { background-color: var(--primary-color); color: #fff; box-shadow: 0 4px 6px -1px rgba(30, 58, 138, 0.3); border-color: var(--primary-color); }
+.nav-item.attempted { background-color: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+.nav-item.correct-nav { background-color: #16a34a; color: #fff; }
+.nav-item.incorrect-nav { background-color: #dc2626; color: #fff; }
+.nav-item.unattempted { background-color: var(--input-bg); color: var(--text-muted); }
+
+/* Question Options */
+.question { margin-bottom: 30px; font-size: 1.15rem; color: var(--text-main); }
+
+.option {
+    cursor: pointer;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+    display: block;
+    background-color: var(--option-bg);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    font-weight: 500;
+    color: var(--text-main);
+    transition: all 0.2s ease;
+    position: relative;
+    padding-left: 3.5rem;
+}
+
+.option:hover {
+    background-color: var(--option-hover);
+    border-color: var(--secondary-color);
+    color: var(--primary-color);
+}
+
+.option input[type="radio"] {
+    position: absolute;
+    left: 1.2rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1.2rem;
+    height: 1.2rem;
+    accent-color: var(--primary-color);
+}
+
+.option input[type="radio"]:checked + span {
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+[data-theme="dark"] .option:hover {
+    color: #60a5fa; /* Bright blue for better visibility in dark mode */
+}
+
+[data-theme="dark"] .option input[type="radio"]:checked + span {
+    color: #60a5fa; /* Bright blue for better visibility in dark mode */
+}
+
+/* ============================
+   UTILITIES & ANIMATION
+   ============================ */
+.section-title {
+    color: var(--text-main); /* Changed from primary-color for better contrast in dark mode */
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 1.75rem;
+}
+
+.title-underline {
+    width: 80px;
+    height: 4px;
+    background: var(--accent-color);
+    border-radius: 2px;
+    margin-top: 15px;
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Form focus states */
+.form-control {
+    background-color: var(--input-bg);
+    border-color: var(--border-color);
+    color: var(--text-main);
+}
+.form-control:focus {
+    background-color: var(--input-bg);
+    color: var(--text-main);
+    box-shadow: none;
+    border: 2px solid var(--secondary-color);
+}
+
+/* Dropdown Menu Dark Mode Support */
+.dropdown-menu {
+    background-color: var(--bg-card);
+    border-color: var(--border-color);
+}
+.dropdown-item {
+    color: var(--text-main);
+}
+.dropdown-item:hover {
+    background-color: var(--option-hover);
+    color: var(--text-main);
+}
+
+/* Styles for Completed Subject Cards */
+.topic-card.subject-completed {
+    background-color: #f0fdf4 !important; /* Light green for light mode */
+    border-color: #22c55e !important;
+}
+
+[data-theme="dark"] .topic-card.subject-completed {
+    background-color: #064e3b !important; /* Deep emerald for dark mode */
+    border-color: #10b981 !important;
+}
+
+.topic-card.subject-completed:hover {
+    box-shadow: 0 10px 15px -3px rgba(34, 197, 94, 0.4);
+}
+
+/* Optional: Make the badge look nice */
+.badge.bg-success {
+    font-size: 0.75rem;
+    padding: 6px 12px;
+    border-radius: 20px;
+}
+
+/* ============================
+   ANIMATIONS
+   ============================ */
+@keyframes palette-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.nav-item-animate {
+  animation: palette-fade-in 0.5s ease-out forwards;
+  animation-delay: var(--animation-delay, 0ms);
+  opacity: 0;
+}
+
+/* --- Modern Premium Loader --- */
+.global-loader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--bg-body); /* Matches your theme background */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.6s;
+}
+
+.loader-wrapper {
+    text-align: center;
+}
+
+/* The Animated Triple Ring */
+.premium-loader {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    margin: 0 auto 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.premium-loader .ring {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border: 4px solid transparent;
+    border-top-color: var(--primary-color); /* Uses your Royal Navy blue */
+    border-radius: 50%;
+    animation: premium-spin 1.5s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+.premium-loader .ring:nth-child(1) { border-top-color: var(--primary-color); animation-delay: -0.45s; }
+.premium-loader .ring:nth-child(2) { border-top-color: var(--secondary-color); animation-delay: -0.3s; }
+.premium-loader .ring:nth-child(3) { border-top-color: var(--accent-color); animation-delay: -0.15s; }
+
+.loader-icon {
+    font-size: 2rem;
+    animation: pulse-icon 2s ease-in-out infinite;
+}
+
+/* Text Styling */
+.loader-title {
+    color: var(--text-main);
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+}
+
+.loader-status {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+/* Animations */
+@keyframes premium-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse-icon {
+    0%, 100% { transform: scale(1); opacity: 0.8; }
+    50% { transform: scale(1.1); opacity: 1; }
+}
+
+.loader-hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* Question Palette: Marked for Review State (Purple) */
+.nav-item.marked-nav {
+    background-color: #7e22ce !important; /* Vibrant Purple */
+    color: #ffffff !important;
+    border-color: #6b21a8 !important;
+    box-shadow: 0 4px 10px rgba(126, 34, 206, 0.4) !important;
+    position: relative;
+}
+
+/* Star indicator for marked questions */
+.nav-item.marked-nav::after {
+    content: "★";
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    font-size: 10px;
+    color: #fbbf24; /* Gold star for high visibility on purple */
+}
+
+/* Gradient for questions that are both Answered (Blue) and Marked (Purple) */
+.nav-item.attempted.marked-nav {
+    background: linear-gradient(135deg, #3b82f6 50%, #7e22ce 50%) !important;
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] .nav-item.marked-nav {
+    background-color: #9333ea !important; /* Lighter Purple for dark mode */
+    border-color: #7e22ce !important;
+}
+
+/* ============================
+   MODERN GLASS TIMER DESIGN
+   ============================ */
+.timer-container {
+    background: linear-gradient(135deg, var(--bg-card) 0%, var(--option-hover) 100%);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 25px 15px;
+    text-align: center;
+    margin-bottom: 25px;
+    box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(10px);
+}
+
+.timer-label {
+    display: inline-block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    font-weight: 800;
+    color: var(--primary-color);
+    background: var(--bg-body);
+    padding: 4px 12px;
+    border-radius: 50px;
+    letter-spacing: 1.5px;
+    margin-bottom: 12px;
+}
+
+.timer-value {
+    font-family: 'Poppins', sans-serif; /* Cleaner font for this look */
+    font-size: 3.5rem;
+    font-weight: 800;
+    color: var(--text-main);
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-shadow: 2px 2px 0px var(--border-color);
+}
+
+.timer-value.low-time {
+    color: #ef4444 !important;
+    text-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+    animation: timer-pulse-soft 1s infinite;
+}
+
+@keyframes timer-pulse-soft {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.02); opacity: 0.8; }
+}
+
+.progress-bar {
+    transition: width 0.6s ease;
+    overflow: visible; /* Ensures text is seen */
+    white-space: nowrap;
+}
+
+/* Ensure white text for darker bars */
+.bg-success, .bg-danger {
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] .progress {
+    background-color: var(--border-color); /* Better contrast in dark mode */
+}
+
+/* Custom Community Stats Palette */
+/* High-Contrast Community Stats Palette */
+.stats-bar-correct {
+    background-color: #16a34a !important; /* Vibrant Green */
+    color: #ffffff !important;
+}
+
+.stats-bar-incorrect {
+    background-color: #dc2626 !important; /* Vibrant Red */
+    color: #ffffff !important;
+}
+
+.stats-bar-left {
+    background-color: #facc15 !important; /* Vibrant Yellow */
+    color: #000000 !important; /* Dark text for better contrast on yellow */
+}
+
+.progress-bar-text {
+    font-weight: 700;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+/* ============================
+   SURETY MATRIX STYLES
+   ============================ */
+.surety-label {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.surety-matrix {
+    display: flex;
+    border: 1.5px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-card);
+}
+
+.surety-opt {
+    flex: 1;
+    padding: 10px 5px;
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-right: 1px solid var(--border-color);
+}
+
+.surety-opt:last-child { border-right: none; }
+
+/* Base Colors */
+
+.surety-100 { background-color: #c6e7c1; color: #166534; }
+
+.surety-75  { background-color: #fce4dc; color: #ff4000; }
+
+.surety-50  { background-color: #fff2c2; color: #fa9624; }
+
+.surety-0   { background-color: #d1e5f7; color: #1e40af; }
+
+
+
+/* Selected States (Dark Versions) */
+
+.surety-100.selected { background-color: #166534 !important; color: #ffffff !important; }
+
+.surety-75.selected  { background-color: #ff4000 !important; color: #ffffff !important; }
+
+.surety-50.selected  { background-color: #fa9624 !important; color: #ffffff !important; }
+
+.surety-0.selected   { background-color: #1e40af !important; color: #ffffff !important; }
+
+
+.surety-opt.selected {
+    transform: scale(1.02);
+    z-index: 2;
+}
+
+.surety-badge {
+    font-size: 0.7rem;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-weight: 700;
+}
+
+/* Increased height for horizontal bar layout to prevent label overlap */
+.confidence-chart-container {
+    height: 200px;
+    width: 100%;
+}
+
+/* ============================
+   AI REVIEW BOX SCROLLING
+   ============================ */
+#ai-review-content {
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+/* Custom Scrollbar for AI Review */
+#ai-review-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+#ai-review-content::-webkit-scrollbar-track {
+    background: var(--input-bg);
+    border-radius: 4px;
+}
+
+#ai-review-content::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+#ai-review-content::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+/* ============================
+   ACCESSIBILITY IMPROVEMENTS
+   ============================ */
+/* Ensure visible focus for keyboard navigation on custom interactive elements */
+[role="button"]:focus,
+[tabindex="0"]:focus {
+    outline: 3px solid var(--secondary-color);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
+    z-index: 10; /* Ensure focus ring is on top */
+}
+
+/* Remove default outline for mouse users if desired, but keep for keyboard */
+[role="button"]:focus:not(:focus-visible),
+[tabindex="0"]:focus:not(:focus-visible) {
+    outline: none;
+    box-shadow: none;
+}
+
+/* ============================
+   BREADCRUMBS
+   ============================ */
+#breadcrumb-container {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.breadcrumb-item a {
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+    font-size: 0.9rem;
+}
+
+.breadcrumb-item a:hover {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
+.breadcrumb-item.active {
+    color: var(--text-main);
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+    color: var(--text-muted);
+}
+
+/* ============================
+   MARKDOWN CONTENT (AI REVIEW)
+   ============================ */
+.markdown-content {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--text-main);
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+    color: var(--primary-color);
+    font-weight: 700;
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+    letter-spacing: 0.5px;
+}
+
+.markdown-content h1 { font-size: 1.5rem; border-bottom: 2px solid var(--border-color); padding-bottom: 0.5rem; }
+.markdown-content h2 { font-size: 1.25rem; }
+.markdown-content h3 { font-size: 1.1rem; color: var(--secondary-color); }
+
+.markdown-content strong {
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.markdown-content table {
+    width: 100%;
+    margin-bottom: 1.5rem;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    border-radius: 8px;
+}
+
+.markdown-content th,
+.markdown-content td {
+    padding: 10px 15px;
+    border: 1px solid var(--border-color);
+    text-align: left;
+}
+
+.markdown-content th {
+    background-color: var(--input-bg);
+    color: var(--text-muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+}
+
+.markdown-content tr:nth-child(even) {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="dark"] .markdown-content tr:nth-child(even) {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.markdown-content hr {
+    border: 0;
+    border-top: 1px solid var(--border-color);
+    margin: 2rem 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+    padding-left: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.markdown-content li {
+    margin-bottom: 0.5rem;
+}
+
+.markdown-content blockquote {
+    border-left: 4px solid var(--accent-color);
+    background-color: var(--input-bg);
+    padding: 1rem;
+    margin: 1.5rem 0;
+    border-radius: 0 8px 8px 0;
+    font-style: italic;
+    color: var(--text-muted);
+}
+
+/* =========================================
+   REACT MIGRATION — MODAL + UI IMPROVEMENT LAYER
+   (Additive only. Original classes above are untouched.)
+   ========================================= */
+
+/* React modal backdrop/dialog (replaces Bootstrap JS modals) */
+.app-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1060;
+    padding: 1rem;
+    animation: appModalFade 0.2s ease;
+}
+@keyframes appModalFade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+.app-modal-dialog {
+    width: 100%;
+    max-width: 500px;
+    animation: appModalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes appModalPop {
+    from { transform: translateY(12px) scale(0.98); opacity: 0; }
+    to   { transform: translateY(0) scale(1); opacity: 1; }
+}
+.app-modal-dialog .modal-content { background: var(--bg-card); }
+
+/* Dark-mode correctness: Bootstrap's bg-white/bg-light are hard-coded.
+   Map them onto theme variables so cards read correctly in dark mode. */
+[data-theme="dark"] .bg-white { background-color: var(--bg-card) !important; }
+[data-theme="dark"] .bg-light { background-color: var(--option-hover) !important; }
+[data-theme="dark"] .modal-content,
+[data-theme="dark"] .card { background-color: var(--bg-card); color: var(--text-main); }
+[data-theme="dark"] .text-dark { color: var(--text-main) !important; }
+[data-theme="dark"] .table { color: var(--text-main); }
+[data-theme="dark"] .border { border-color: var(--border-color) !important; }
+
+/* Themed stat card helper */
+.stat-card { background: var(--bg-card) !important; }
+
+/* Subtle polish: smoother card hovers + focus rings (UI improvement) */
+.card { transition: box-shadow 0.2s ease, transform 0.2s ease; }
+.topic-card:hover { transform: translateY(-4px); box-shadow: var(--hover-shadow); }
+.btn:focus-visible,
+.form-select:focus-visible,
+.nav-item:focus-visible,
+.surety-opt:focus-visible {
+    outline: 2px solid var(--secondary-color);
+    outline-offset: 2px;
+}

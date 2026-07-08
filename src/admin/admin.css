@@ -1,0 +1,142 @@
+/* =========================================
+   ADMIN STYLES (ported verbatim from admin.html <style>)
+   ========================================= */
+body {
+  font-family: "Poppins", sans-serif;
+  background-color: #f4f7f9;
+}
+.btn-primary-custom {
+  background-color: #1e3a8a;
+  color: white;
+  border: none;
+  transition: all 0.3s ease;
+}
+.btn-primary-custom:hover {
+  background-color: #1e40af;
+  color: white;
+  transform: translateY(-2px);
+}
+
+/* Discussion Matrix Styles */
+.admin-q-card {
+  border-left: 5px solid #1e3a8a;
+  scroll-margin-top: 100px;
+}
+.admin-q-card.high-error {
+  border-left-color: #dc3545 !important;
+}
+
+.explanation-box {
+  background-color: #fff9e6;
+  border-left: 4px solid #ffc107;
+  padding: 15px;
+  border-radius: 0 8px 8px 0;
+}
+
+.badge.user-tag {
+  font-size: 0.7rem;
+  background-color: white;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.user-list-container {
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+/* HEAT MAP PALETTE STYLES */
+.admin-palette-sidebar {
+  position: sticky;
+  top: 80px;
+  background: white;
+  border-radius: 15px;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 5px;
+}
+.palette-item {
+  width: 100%;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: bold;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: 0.2s;
+  border: 1px solid #e2e8f0;
+}
+.palette-item:hover {
+  transform: scale(1.1);
+  filter: brightness(0.9);
+}
+
+/* Accuracy < 40%: Vibrant Red */
+.heat-low {
+  background-color: #ef4444;
+  color: #ffffff;
+  border: 1px solid #dc2626;
+}
+
+/* Accuracy 40-70%: Vibrant Orange */
+.heat-mid {
+  background-color: #f59e0b;
+  color: #ffffff;
+  border: 1px solid #d97706;
+}
+
+/* Accuracy > 70%: Vibrant Green */
+.heat-high {
+  background-color: #10b981;
+  color: #ffffff;
+  border: 1px solid #059669;
+}
+
+@media (max-width: 991px) {
+  .admin-palette-sidebar {
+    position: relative;
+    top: 0;
+    margin-bottom: 20px;
+  }
+}
+.badge.user-tag {
+  font-size: 0.75rem;
+  background-color: white;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  padding: 4px 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.badge.user-tag strong {
+  color: #1e3a8a;
+}
+
+/* React admin modal (replaces Bootstrap JS modal) */
+.admin-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 1060;
+  padding: 2rem 1rem;
+  overflow-y: auto;
+}
+.admin-modal-xl {
+  width: 100%;
+  max-width: 1140px;
+}
+.border-dashed {
+  border-style: dashed !important;
+}
