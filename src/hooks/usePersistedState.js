@@ -4,7 +4,12 @@ export function usePersistedState(key, defaultValue) {
   const [value, setValue] = useState(() => {
     try {
       const stored = localStorage.getItem(key);
-      return stored ? JSON.parse(stored) : defaultValue;
+      if (stored === null) return defaultValue;
+      try {
+        return JSON.parse(stored);
+      } catch {
+        return stored;
+      }
     } catch {
       return defaultValue;
     }

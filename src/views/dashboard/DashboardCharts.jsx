@@ -1,31 +1,20 @@
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import { ChartHelper } from "../../lib/chartHelper";
 import { calculateConfidenceStats } from "../../lib/helpers";
+import { useChart } from "../../hooks/useChart";
 
 export default function DashboardCharts({ chartData, loaded, theme }) {
-  const perfChartRef = useRef(null);
-  const confChartRef = useRef(null);
-  const perfInstance = useRef(null);
-  const confInstance = useRef(null);
+  const { confValues, confStats } = calculateConfidenceStats(chartData);
 
-  useEffect(() => {
-    const { confValues, confStats } = calculateConfidenceStats(chartData);
+  const confChartRef = useChart(
+    (canvas) => ChartHelper.renderConfidenceChart(canvas, confValues, confStats),
+    [loaded, theme]
+  );
 
-    if (perfInstance.current) { perfInstance.current.destroy(); perfInstance.current = null; }
-    if (perfChartRef.current) {
-      perfInstance.current = ChartHelper.renderPerformanceChart(perfChartRef.current, chartData);
-    }
-
-    if (confInstance.current) { confInstance.current.destroy(); confInstance.current = null; }
-    if (confChartRef.current) {
-      confInstance.current = ChartHelper.renderConfidenceChart(confChartRef.current, confValues, confStats);
-    }
-
-    return () => {
-      if (perfInstance.current) { perfInstance.current.destroy(); perfInstance.current = null; }
-      if (confInstance.current) { confInstance.current.destroy(); confInstance.current = null; }
-    };
-  }, [loaded, theme]);
+  const perfChartRef = useChart(
+    (canvas) => ChartHelper.renderPerformanceChart(canvas, chartData),
+    [loaded, theme]
+  );
 
   return (
     <div className="charts-grid">

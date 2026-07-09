@@ -2,21 +2,20 @@ import React, { useCallback, useEffect, useReducer, useRef, useState } from "rea
 import { useApp } from "../../store";
 import { DataManager } from "../../lib/dataManager";
 import { toastr } from "../../lib/toastr";
-import { MAX_USER_HISTORY } from "../../config/constants";
-import { firebaseService } from "../../services/firebaseService";
-import { quizService } from "../../services/quizService";
-import { QuizTimer } from "../../lib/timer";
+import { QUIZ_PHASES, QUIZ_DATA_PREFIX } from "../../config/constants";
+import { useQuizTimer } from "../../hooks/useQuizTimer";
+import { useQuizNavigation } from "../../hooks/useQuizNavigation";
+import { useQuizPersistence } from "../../hooks/useQuizPersistence";
+import { useQuizSubmission } from "../../hooks/useQuizSubmission";
 import QuizLoading from "./QuizLoading";
 import QuizStartModal from "./QuizStartModal";
 import QuizActive from "./QuizActive";
 import ReviewMode from "../review/ReviewMode";
 
 export default function QuizFlow() {
-  const { g, currentUser, viewParams, showDashboard, showChapters, bumpHistory } = useApp();
+  const { currentUser, viewParams, showDashboard, showChapters } = useApp();
 
-  const [phase, setPhase] = useState("loading");
-  const [timerDisplay, setTimerDisplay] = useState({ text: "00:00", low: false });
-  const [isTimerPaused, setIsTimerPaused] = useState(false);
+  const [phase, setPhase] = useState(QUIZ_PHASES.LOADING);
   const [, forceUpdate] = useReducer((x) => x + 1, 0);
 
   const s = useRef({
@@ -33,79 +32,61 @@ export default function QuizFlow() {
     statsLine: null,
   }).current;
 
-  const timerRef = useRef(null);
-  const questionStartTimeRef = useRef(Date.now());
   const savedTimeRef = useRef(null);
   const submitAllRef = useRef(() => {});
 
-  const updateQuestionTimer = useCallback(() => {
-    if (isTimerPaused || s.quizSubmitted) return;
-    const now = Date.now();
-    const spent = Math.floor((now - questionStartTimeRef.current) / 1000);
-    s.questionTimeSpent[s.currentQuestionIndex] =
-      (s.questionTimeSpent[s.currentQuestionIndex] || 0) + spent;
-    questionStartTimeRef.current = now;
-  }, [s, isTimerPaused]);
+  const { timerDisplay, isPaused: isTimerPaused, start: startTimer, toggle: toggleTimerHook, stop: stopTimer, getTimeLeft } =
+    useQuizTimer(s.currentQuizData.length || 1);
+
+  const { getCurrentIndex, gotoQuestion: navigateToIndex, navigateQuestions: stepNavigation, updateTimeSpent, resetTimeTracking, questionTimeSpent } =
+    useQuizNavigation(s.currentQuizData.length || 1, isTimerPaused);
+
+  const { saveProgress, clearProgress, restoreProgress } = useQuizPersistence();
+  const { submit: submitToFirebase } = useQuizSubmission(s);
+
+  const syncNavToStore = useCallback(() => {
+    s.currentQuestionIndex = getCurrentIndex();
+    s.questionTimeSpent = questionTimeSpent;
+  }, [getCurrentIndex, questionTimeSpent, s]);
 
   const saveQuizProgress = useCallback(() => {
-    if (!s.currentChapterId || s.currentChapterId.startsWith("revision_") || s.quizSubmitted) return;
-    try {
-      const p = {
-        userAnswers: s.userAnswers,
-        markedForReview: s.markedForReview,
-        timeLeft: timerRef.current ? timerRef.current.getTimeLeft() : null,
-        currentIndex: s.currentQuestionIndex,
-        questionTimeSpent: s.questionTimeSpent,
-      };
-      const key = `quiz_progress_${s.currentChapterId}`;
-      DataManager.cache[key] = JSON.stringify(p);
-      localStorage.setItem(key, JSON.stringify(p));
-    } catch (e) {
-      console.error("Save progress failed", e);
-    }
-  }, [s]);
+    saveProgress(s.currentChapterId, s.userAnswers, s.markedForReview, getCurrentIndex(), questionTimeSpent, getTimeLeft, s.quizSubmitted);
+  }, [s, getCurrentIndex, questionTimeSpent, getTimeLeft, saveProgress]);
 
-  const clearQuizProgress = useCallback((chapId) => {
-    const key = `quiz_progress_${chapId}`;
-    delete DataManager.cache[key];
-    localStorage.removeItem(key);
-  }, []);
+  const startQuizExecution = useCallback((resumedTimeLeft) => {
+    setPhase(QUIZ_PHASES.ACTIVE);
+    resetTimeTracking();
+    startTimer(resumedTimeLeft, () => {
+      toastr.warning("Time's up! Auto-submitting...");
+      submitAllRef.current(true);
+    });
+  }, [startTimer, resetTimeTracking]);
 
   const toggleTimer = () => {
     if (s.quizSubmitted) return;
     if (isTimerPaused) {
-      if (timerRef.current) timerRef.current.resume();
-      setIsTimerPaused(false);
-      questionStartTimeRef.current = Date.now();
+      toggleTimerHook();
+      resetTimeTracking();
       toastr.success("Timer Resumed");
     } else {
-      updateQuestionTimer();
-      if (timerRef.current) timerRef.current.pause();
-      setIsTimerPaused(true);
+      updateTimeSpent();
+      toggleTimerHook();
       toastr.warning("Timer Paused. Options disabled.");
     }
   };
 
-  const startQuizExecution = (resumedTimeLeft) => {
-    setPhase("active");
-    questionStartTimeRef.current = Date.now();
-
-    const limit = s.currentQuizData.length * 90;
-    const initialTime = resumedTimeLeft !== null ? resumedTimeLeft : limit;
-
-    timerRef.current = new QuizTimer(
-      (text, low) => setTimerDisplay({ text, low }),
-      null,
-      () => {
-        toastr.warning("Time's up! Auto-submitting...");
-        submitAllRef.current(true);
-      }
-    );
-    timerRef.current.start(initialTime);
-  };
+  const submitAll = useCallback((forceSubmit = false) => {
+    if (!forceSubmit && !window.confirm("Are you sure you want to submit?")) return;
+    stopTimer();
+    updateTimeSpent();
+    syncNavToStore();
+    clearProgress(s.currentChapterId);
+    submitToFirebase(forceSubmit).then(() => forceUpdate());
+  }, [stopTimer, updateTimeSpent, syncNavToStore, clearProgress, submitToFirebase, s]);
+  submitAllRef.current = submitAll;
 
   const loadQuiz = useCallback(
-    async (subj, chapId, chapName, skipModal = false, pastData = null, referrer = null) => {
+    async (subj, chapId, chapName, skipModal = false, pastData = null) => {
       const subjectPrefix = subj ? subj.replace(/\s+/g, "_") : "";
       const fullChapId = chapId && subjectPrefix && !chapId.startsWith("revision_")
         ? (chapId.includes(subjectPrefix) ? chapId : `${subjectPrefix}_${chapId}`)
@@ -128,7 +109,7 @@ export default function QuizFlow() {
       try {
         let qData = [];
         if (chapId.startsWith("revision_")) {
-          qData = DataManager.cache[`quiz_data_${chapId}`];
+          qData = DataManager.cache[`${QUIZ_DATA_PREFIX}${chapId}`];
           if (!qData) throw new Error("Revision data lost.");
         } else {
           qData = await DataManager.fetchQuizQuestions(chapId);
@@ -139,7 +120,6 @@ export default function QuizFlow() {
           showChapters(subj);
           return;
         }
-
         if (qData.length === 0) {
           toastr.error("No questions found in this test.");
           showChapters(subj);
@@ -152,20 +132,21 @@ export default function QuizFlow() {
           s.userAnswers = pastData.userAnswers || {};
           s.questionTimeSpent = pastData.questionTimeSpent || {};
           s.submittedResult = { resultObject: pastData };
-          setPhase("review");
+          setPhase(QUIZ_PHASES.REVIEW);
           return;
         }
 
-        const progKey = `quiz_progress_${chapId}`;
-        const savedProgStr = DataManager.cache[progKey] || localStorage.getItem(progKey);
-
-        if (savedProgStr && !chapId.startsWith("revision_")) {
-          const p = JSON.parse(savedProgStr);
-          s.userAnswers = p.userAnswers || {};
-          s.markedForReview = p.markedForReview || {};
-          s.currentQuestionIndex = p.currentIndex || 0;
-          s.questionTimeSpent = p.questionTimeSpent || {};
-          savedTimeRef.current = p.timeLeft;
+        const savedProgress = restoreProgress(chapId);
+        if (savedProgress && !chapId.startsWith("revision_")) {
+          s.userAnswers = savedProgress.userAnswers || {};
+          s.markedForReview = savedProgress.markedForReview || {};
+          s.questionTimeSpent = savedProgress.questionTimeSpent || {};
+          Object.assign(questionTimeSpent, savedProgress.questionTimeSpent || {});
+          savedTimeRef.current = savedProgress.timeLeft;
+          if (savedProgress.currentIndex !== undefined) {
+            navigateToIndex(savedProgress.currentIndex);
+            syncNavToStore();
+          }
         } else {
           savedTimeRef.current = null;
         }
@@ -173,7 +154,7 @@ export default function QuizFlow() {
         if (skipModal) {
           startQuizExecution(savedTimeRef.current);
         } else {
-          setPhase("startModal");
+          setPhase(QUIZ_PHASES.START_MODAL);
         }
       } catch (err) {
         console.error(err);
@@ -181,7 +162,7 @@ export default function QuizFlow() {
         showChapters(subj);
       }
     },
-    [s, showChapters]
+    [s, showChapters, restoreProgress, navigateToIndex, syncNavToStore, questionTimeSpent, startQuizExecution]
   );
 
   useEffect(() => {
@@ -196,34 +177,24 @@ export default function QuizFlow() {
   }, [viewParams, loadQuiz]);
 
   const exitQuiz = useCallback(() => {
-    if (!s.quizSubmitted && phase === "active") {
-      updateQuestionTimer();
+    if (!s.quizSubmitted && phase === QUIZ_PHASES.ACTIVE) {
+      updateTimeSpent();
+      syncNavToStore();
       saveQuizProgress();
     }
-    if (timerRef.current) {
-      timerRef.current.stop();
-      timerRef.current = null;
-    }
+    stopTimer();
     const r = viewParams.referrer;
     if (r === "dashboard") showDashboard();
     else if (r === "chapters" || r === "subjects") showChapters(s.currentSubject);
     else showDashboard();
-  }, [s, phase, viewParams.referrer, updateQuestionTimer, saveQuizProgress, showDashboard, showChapters]);
+  }, [s, phase, viewParams.referrer, updateTimeSpent, syncNavToStore, saveQuizProgress, stopTimer, showDashboard, showChapters]);
 
   const gotoQuestion = (idx) => {
-    if (isTimerPaused) return;
-    updateQuestionTimer();
-    s.currentQuestionIndex = idx;
-    questionStartTimeRef.current = Date.now();
-    forceUpdate();
+    if (navigateToIndex(idx)) { syncNavToStore(); forceUpdate(); }
   };
 
   const navigateQuestions = (step) => {
-    if (isTimerPaused) return;
-    const n = s.currentQuestionIndex + step;
-    if (n >= 0 && n < s.currentQuizData.length) {
-      gotoQuestion(n);
-    }
+    if (stepNavigation(step)) { syncNavToStore(); forceUpdate(); }
   };
 
   const selectAnswer = (idx) => {
@@ -263,103 +234,13 @@ export default function QuizFlow() {
     forceUpdate();
   };
 
-  const submitAll = useCallback(
-    (forceSubmit = false) => {
-      if (!forceSubmit && !window.confirm("Are you sure you want to submit?")) return;
-
-      if (timerRef.current) timerRef.current.stop();
-      updateQuestionTimer();
-
-      s.quizSubmitted = true;
-      clearQuizProgress(s.currentChapterId);
-
-      const { finalScore, totalMarks, percentage, correct, incorrect, unattempted } =
-        quizService.calculateScore(s.userAnswers, s.currentQuizData);
-
-      const now = new Date();
-
-      const leaderboardEntry = {
-        userEmail: currentUser ? currentUser.email : "guest",
-        scorePercent: parseFloat(percentage),
-        score: finalScore,
-        rankTime: now.toISOString(),
-      };
-
-      const resultObject = {
-        userId: currentUser ? currentUser.uid : "guest",
-        userEmail: currentUser ? currentUser.email : "guest",
-        subject: s.currentSubject,
-        chapterId: s.currentChapterId,
-        chapterName: s.currentChapterName,
-        score: finalScore,
-        totalMarks,
-        scorePercent: parseFloat(percentage),
-        userAnswers: s.userAnswers,
-        questionTimeSpent: s.questionTimeSpent,
-        timestamp: now,
-      };
-
-      s.submittedResult = { correct, incorrect, unattempted, finalScore, totalMarks, percentage, resultObject };
-      s.statsLine = null;
-      forceUpdate();
-
-      if (currentUser) {
-        firebaseService.submitResult(resultObject).then(async (docId) => {
-          leaderboardEntry.resultId = docId;
-          g.userHistory.unshift({ ...resultObject, timestamp: now });
-          if (g.userHistory.length > MAX_USER_HISTORY) g.userHistory.pop();
-          g.dashboardDataLoaded = true;
-          bumpHistory();
-
-          await DataManager.invalidateCache(`global_stats_${s.currentChapterId}`);
-          await DataManager.invalidateCache(`user_history_${currentUser.uid}`);
-
-          if (!s.currentChapterId.startsWith("revision_")) {
-            try {
-              await firebaseService.updateChapterStats(
-                s.currentChapterId, percentage, leaderboardEntry, s.currentQuizData, s.userAnswers
-              );
-              toastr.success("Result and stats saved!");
-            } catch (e) {
-              console.error("Stats update failed:", e);
-            }
-          } else {
-            toastr.success("Revision test result saved!");
-          }
-
-          const stats = await DataManager.fetchGlobalStats(s.currentChapterId, true);
-          if (stats) {
-            let betterThan = 0;
-            const pct = parseFloat(percentage);
-            for (let k = 0; k < stats.allScores.length; k++) {
-              if (stats.allScores[k] < pct) betterThan++;
-            }
-            const percentile = stats.totalAttempts > 0
-              ? ((betterThan / stats.totalAttempts) * 100).toFixed(0) : 0;
-            s.statsLine = `🌍 Class Performance: Top <strong>${100 - percentile}%</strong>. (Avg: ${stats.avg.toFixed(1)}%)`;
-            forceUpdate();
-          }
-        });
-      }
-    },
-    [s, currentUser, g, updateQuestionTimer, clearQuizProgress, bumpHistory]
-  );
-  submitAllRef.current = submitAll;
-
   const reviewAfterSubmit = () => {
-    loadQuiz(
-      s.currentSubject,
-      s.currentChapterId,
-      s.currentChapterName,
-      true,
-      s.submittedResult.resultObject,
-      "chapters"
-    );
+    loadQuiz(s.currentSubject, s.currentChapterId, s.currentChapterName, true, s.submittedResult.resultObject, "chapters");
   };
 
-  if (phase === "loading") return <QuizLoading />;
+  if (phase === QUIZ_PHASES.LOADING) return <QuizLoading />;
 
-  if (phase === "startModal") {
+  if (phase === QUIZ_PHASES.START_MODAL) {
     return (
       <QuizStartModal
         subject={s.currentSubject}
@@ -372,7 +253,7 @@ export default function QuizFlow() {
     );
   }
 
-  if (phase === "review") {
+  if (phase === QUIZ_PHASES.REVIEW) {
     return (
       <div className="page" style={{ maxWidth: 1200 }}>
         <ReviewMode
@@ -391,7 +272,7 @@ export default function QuizFlow() {
   return (
     <QuizActive
       quizData={s.currentQuizData}
-      currentQuestionIndex={s.currentQuestionIndex}
+      currentQuestionIndex={getCurrentIndex()}
       userAnswers={s.userAnswers}
       markedForReview={s.markedForReview}
       isSubmitted={s.quizSubmitted}

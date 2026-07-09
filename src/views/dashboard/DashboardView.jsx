@@ -4,6 +4,7 @@ import { useApp } from "../../store";
 import { DataManager } from "../../lib/dataManager";
 import { DifficultyHelper } from "../../lib/helpers";
 import { toastr } from "../../lib/toastr";
+import { useUserHistory, useGlobalStats } from "../../hooks/useDataManager";
 import DashboardStats from "./DashboardStats";
 import AIMentor from "./AIMentor";
 import DashboardCharts from "./DashboardCharts";
@@ -15,6 +16,9 @@ export default function DashboardView() {
   const [loaded, setLoaded] = useState(g.dashboardDataLoaded);
   const [conceptGap, setConceptGap] = useState({ text: "0%", cls: "stat--pen" });
 
+  const { fetchHistory } = useUserHistory(currentUser?.uid);
+  const { fetchStats } = useGlobalStats(null);
+
   useEffect(() => {
     let cancelled = false;
     async function loadUserDashboard(forceRefresh = false) {
@@ -24,7 +28,7 @@ export default function DashboardView() {
         return;
       }
       try {
-        const historyData = await DataManager.syncUserHistory(currentUser.uid, forceRefresh);
+        const historyData = await fetchHistory(currentUser.uid, forceRefresh);
         if (cancelled) return;
         if (historyData) g.userHistory = historyData;
         if (historyData) { g.dashboardDataLoaded = true; setLoaded(true); }
@@ -45,7 +49,7 @@ export default function DashboardView() {
         const uniqueChapters = [...new Set(results.map((r) => r.chapterId))];
         const statsMap = {};
         await Promise.all(uniqueChapters.map(async (id) => {
-          const stats = await DataManager.fetchGlobalStats(id);
+          const stats = await fetchStats(id);
           if (stats) statsMap[id] = stats;
         }));
         if (cancelled) return;

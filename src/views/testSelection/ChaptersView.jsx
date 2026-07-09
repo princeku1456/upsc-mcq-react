@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useApp } from "../../store";
-import { DataManager } from "../../lib/dataManager";
-import { toastr } from "../../lib/toastr";
+import { useQuizManifest } from "../../hooks/useDataManager";
 import Spinner from "../../components/ui/Spinner";
 import EmptyState from "../../components/ui/EmptyState";
 import ChapterCard from "./ChapterCard";
@@ -13,23 +12,12 @@ export default function ChaptersView() {
   const { g } = useApp();
   const navigate = useNavigate();
 
-  const [allQuizData, setAllQuizData] = useState(
-    DataManager.cache.quizManifest || null
-  );
-  const [revisionModalOpen, setRevisionModalOpen] = useState(false);
+  const { manifest: allQuizData, loading, error, fetchManifest } = useQuizManifest();
+  const [revisionModalOpen, setRevisionModalOpen] = React.useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    async function init() {
-      if (!allQuizData) {
-        const data = await DataManager.fetchQuizManifest();
-        if (cancelled) return;
-        if (data) setAllQuizData(data);
-      }
-    }
-    init();
-    return () => { cancelled = true; };
-  }, [allQuizData]);
+    if (!allQuizData && !loading && !error) fetchManifest();
+  }, [allQuizData, loading, error, fetchManifest]);
 
   if (!allQuizData) return <Spinner text="Loading Chapters..." />;
 

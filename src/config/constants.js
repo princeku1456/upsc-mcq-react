@@ -40,3 +40,14 @@ export const STATUS_FILTERS = [
   { id: "incorrect", label: "Incorrect" },
   { id: "unattempted", label: "Unattempted" },
 ];
+
+export const QUIZ_PHASES = {
+  LOADING: "loading",
+  START_MODAL: "startModal",
+  ACTIVE: "active",
+  REVIEW: "review",
+};
+
+export const QUIZ_STORAGE_PREFIX = "quiz_progress_";
+export const REVISION_PREFIX = "revision_";
+export const QUIZ_DATA_PREFIX = "quiz_data_";

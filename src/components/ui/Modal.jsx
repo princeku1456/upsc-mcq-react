@@ -1,5 +1,11 @@
 import React, { useEffect } from "react";
 
+function getModalClass(size) {
+  if (size === "lg") return "modal modal--lg";
+  if (size === "xl") return "modal modal--xl";
+  return "modal";
+}
+
 export default function Modal({ title, children, onClose, size, actions }) {
   useEffect(() => {
     const handleEsc = (e) => {
@@ -9,11 +15,9 @@ export default function Modal({ title, children, onClose, size, actions }) {
     return () => document.removeEventListener("keydown", handleEsc);
   }, [onClose]);
 
-  const modalCls = size === "lg" ? "modal modal--lg" : "modal";
-
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className={modalCls} onClick={(e) => e.stopPropagation()}>
+      <div className={getModalClass(size)} onClick={(e) => e.stopPropagation()}>
         {title && <h3 className="modal__title">{title}</h3>}
         {children}
         {actions && <div className="modal__actions">{actions}</div>}

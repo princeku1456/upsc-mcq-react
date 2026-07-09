@@ -10,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { auth, db, googleProvider } from "./lib/firebase";
 import { DataManager } from "./lib/dataManager";
 import { toastr } from "./lib/toastr";
+import { usePersistedState } from "./hooks/usePersistedState";
 
 const AppContext = createContext(null);
 export const useApp = () => useContext(AppContext);
@@ -30,9 +31,7 @@ export function AppProvider({ children }) {
   const navigate = useNavigate();
 
   const [currentUser, setCurrentUser] = useState(null);
-  const [theme, setTheme] = useState(
-    () => localStorage.getItem("theme") || "light"
-  );
+  const [theme, setTheme] = usePersistedState("theme", "light");
   const [globalLoaderVisible, setGlobalLoaderVisible] = useState(true);
   const [isRegistering, setIsRegistering] = useState(false);
   const [viewParams, setViewParams] = useState({});
@@ -47,21 +46,17 @@ export function AppProvider({ children }) {
 
   const applyTheme = useCallback((t) => {
     document.documentElement.setAttribute("data-theme", t);
-    localStorage.setItem("theme", t);
     setTheme(t);
-  }, []);
+  }, [setTheme]);
 
   const toggleTheme = useCallback(() => {
-    const currentTheme =
-      document.documentElement.getAttribute("data-theme") || "light";
-    const newTheme = currentTheme === "light" ? "dark" : "light";
+    const newTheme = theme === "light" ? "dark" : "light";
     applyTheme(newTheme);
-  }, [applyTheme]);
+  }, [theme, applyTheme]);
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") || "light";
-    applyTheme(savedTheme);
-  }, [applyTheme]);
+    document.documentElement.setAttribute("data-theme", theme);
+  }, []);
 
   const showHome = useCallback(() => {
     navigate("/");

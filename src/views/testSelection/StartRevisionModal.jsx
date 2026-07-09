@@ -3,6 +3,7 @@ import { useApp } from "../../store";
 import { DataManager } from "../../lib/dataManager";
 import { getCorrectIndex } from "../../lib/helpers";
 import { toastr } from "../../lib/toastr";
+import { useQuizQuestions } from "../../hooks/useDataManager";
 import { REVISION_QUESTION_OPTIONS } from "../../config/constants";
 import Modal from "../../components/ui/Modal";
 
@@ -13,6 +14,8 @@ export default function StartRevisionModal({ subject, onClose }) {
   const [includeIncorrect, setIncludeIncorrect] = useState(true);
   const [includeUnattempted, setIncludeUnattempted] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  const { fetchQuestions } = useQuizQuestions(null);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
@@ -29,7 +32,7 @@ export default function StartRevisionModal({ subject, onClose }) {
       for (const res of historyItems) {
         try {
           const docId = res.chapterId;
-          const questions = await DataManager.fetchQuizQuestions(docId);
+          const questions = await fetchQuestions(docId);
           if (!questions || questions.length === 0) continue;
 
           questions.forEach((q, idx) => {

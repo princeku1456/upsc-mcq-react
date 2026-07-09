@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { useApp } from "../../store";
-import { DataManager } from "../../lib/dataManager";
+import { useQuizManifest } from "../../hooks/useDataManager";
 import { toastr } from "../../lib/toastr";
 import EmptyState from "../../components/ui/EmptyState";
 import Spinner from "../../components/ui/Spinner";
@@ -8,30 +8,17 @@ import SubjectCard from "./SubjectCard";
 
 export default function SubjectsView() {
   const { g } = useApp();
-  const [allQuizData, setAllQuizData] = useState(
-    DataManager.cache.quizManifest || null
-  );
-  const [failed, setFailed] = useState(false);
+  const { manifest: allQuizData, loading, error, fetchManifest } = useQuizManifest();
 
   useEffect(() => {
-    let cancelled = false;
-    async function init() {
-      if (!allQuizData) {
-        const data = await DataManager.fetchQuizManifest();
-        if (cancelled) return;
-        if (data) {
-          setAllQuizData(data);
-        } else {
-          setFailed(true);
-          toastr.error("Failed to load subject data.");
-        }
-      }
-    }
-    init();
-    return () => { cancelled = true; };
-  }, [allQuizData]);
+    if (!allQuizData && !loading && !error) fetchManifest();
+  }, [allQuizData, loading, error, fetchManifest]);
 
-  if (failed) return <EmptyState icon="⚠️" title="Failed to load" message="Could not fetch subject list." />;
+  useEffect(() => {
+    if (error) toastr.error("Failed to load subject data.");
+  }, [error]);
+
+  if (error) return <EmptyState icon="⚠️" title="Failed to load" message="Could not fetch subject list." />;
   if (!allQuizData) return <Spinner text="Loading Subjects..." />;
 
   const subjectsList = Object.keys(allQuizData);
