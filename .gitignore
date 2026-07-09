@@ -1,3 +1,4 @@
 # include node modules
 
 node_modules/
+dist/
