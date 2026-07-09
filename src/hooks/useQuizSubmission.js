@@ -10,7 +10,7 @@ export function useQuizSubmission(stateRef) {
   const { g, currentUser, bumpHistory } = useApp();
 
   const submit = useCallback(async (forceSubmit = false) => {
-    const s = stateRef.current;
+    const s = stateRef;
     if (!forceSubmit && !window.confirm("Are you sure you want to submit?")) return null;
 
     const { finalScore, totalMarks, percentage, correct, incorrect, unattempted } =

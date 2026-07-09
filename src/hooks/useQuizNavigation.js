@@ -4,39 +4,43 @@ export function useQuizNavigation(totalQuestions, isPaused) {
   const currentQuestionIndexRef = useRef(0);
   const questionStartTimeRef = useRef(Date.now());
   const questionTimeSpentRef = useRef({});
+  const totalRef = useRef(totalQuestions);
+  const pausedRef = useRef(isPaused);
+  totalRef.current = totalQuestions;
+  pausedRef.current = isPaused;
 
   const getCurrentIndex = useCallback(() => currentQuestionIndexRef.current, []);
 
   const updateTimeSpent = useCallback(() => {
-    if (isPaused) return;
+    if (pausedRef.current) return;
     const now = Date.now();
     const idx = currentQuestionIndexRef.current;
     const spent = Math.floor((now - questionStartTimeRef.current) / 1000);
     questionTimeSpentRef.current[idx] =
       (questionTimeSpentRef.current[idx] || 0) + spent;
     questionStartTimeRef.current = now;
-  }, [isPaused]);
+  }, []);
 
   const gotoQuestion = useCallback(
     (idx) => {
-      if (isPaused || idx < 0 || idx >= totalQuestions) return false;
+      if (pausedRef.current || idx < 0 || idx >= totalRef.current) return false;
       updateTimeSpent();
       currentQuestionIndexRef.current = idx;
       questionStartTimeRef.current = Date.now();
       return true;
     },
-    [isPaused, totalQuestions, updateTimeSpent]
+    [updateTimeSpent]
   );
 
   const navigateQuestions = useCallback(
     (step) => {
       const next = currentQuestionIndexRef.current + step;
-      if (next >= 0 && next < totalQuestions) {
+      if (next >= 0 && next < totalRef.current) {
         return gotoQuestion(next);
       }
       return false;
     },
-    [totalQuestions, gotoQuestion]
+    [gotoQuestion]
   );
 
   const resetTimeTracking = useCallback(() => {

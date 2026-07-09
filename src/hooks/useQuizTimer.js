@@ -7,13 +7,15 @@ export function useQuizTimer(questionCount) {
   const [isPaused, setIsPaused] = useState(false);
   const timerRef = useRef(null);
   const onCompleteRef = useRef(null);
+  const countRef = useRef(questionCount);
+  countRef.current = questionCount;
 
   const start = useCallback(
     (resumedTimeLeft, onComplete) => {
       onCompleteRef.current = onComplete;
       const limit = resumedTimeLeft !== null
         ? resumedTimeLeft
-        : questionCount * QUIZ_TIMER_PER_QUESTION_SECONDS;
+        : countRef.current * QUIZ_TIMER_PER_QUESTION_SECONDS;
 
       timerRef.current = new QuizTimer(
         (text, low) => setTimerDisplay({ text, low }),
@@ -25,7 +27,7 @@ export function useQuizTimer(questionCount) {
       timerRef.current.start(limit);
       setIsPaused(false);
     },
-    [questionCount]
+    []
   );
 
   const toggle = useCallback(() => {
