@@ -122,34 +122,51 @@ export function AppProvider({ children }) {
     else showHome();
   }, [showDashboard, showHome]);
 
+  // Keep always-current references to the navigation helpers so the auth
+  // listener below can subscribe ONCE and never needs them in its deps.
+  // (With <BrowserRouter>, `navigate` — and therefore showHome/showDashboard —
+  // gets a new identity on every URL change. If the auth effect depended on
+  // them it would re-subscribe on every navigation, and each fresh
+  // onAuthStateChanged subscription fires immediately with the current user,
+  // re-triggering showDashboard() and bouncing the user back to /dashboard.)
+  const showHomeRef = useRef(showHome);
+  const showDashboardRef = useRef(showDashboard);
+  const initialAuthDoneRef = useRef(false);
   useEffect(() => {
-    let initialAuthDone = false;
+    showHomeRef.current = showHome;
+    showDashboardRef.current = showDashboard;
+  });
+
+  useEffect(() => {
     const unsub = auth.onAuthStateChanged((user) => {
       if (user) {
         if (user.emailVerified === false) {
           setCurrentUser(null);
-          showHome();
+          showHomeRef.current();
           auth.signOut();
           setGlobalLoaderVisible(false);
           return;
         }
         setCurrentUser(user);
-        if (!initialAuthDone) {
-          initialAuthDone = true;
-          showDashboard();
+        if (!initialAuthDoneRef.current) {
+          initialAuthDoneRef.current = true;
+          showDashboardRef.current();
+          performMorningSync();
         }
-        performMorningSync();
         setGlobalLoaderVisible(false);
       } else {
         setCurrentUser(null);
         g.userHistory = [];
         g.dashboardDataLoaded = false;
-        showHome();
+        initialAuthDoneRef.current = false;
+        showHomeRef.current();
         setGlobalLoaderVisible(false);
       }
     });
     return unsub;
-  }, [showHome, g]);
+    // Intentionally empty deps: subscribe once for the app's lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleAuthError(error) {
     switch (error.code) {
