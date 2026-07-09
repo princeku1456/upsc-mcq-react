@@ -7,6 +7,7 @@
 import firebase from "firebase/compat/app";
 import "firebase/compat/auth";
 import "firebase/compat/firestore";
+import { initializeFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCTNuIyage6u0TxZureIZt1E18deqZ10UE",
@@ -25,12 +26,25 @@ export const GEMINI_API_KEY = null;
 if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 
-  // OPTIMIZATION: Enable offline persistence with multi-tab support
-  // This reduces reads and allows multi-tab synchronization
-  firebase.firestore().enablePersistence({ synchronizeTabs: true })
-    .catch((err) => {
+  // Initialize Firestore with long-polling BEFORE the compat wrapper
+  // touches it — this prevents the streaming WebChannel transport from
+  // being selected, which avoids ERR_INTERNET_DISCONNECTED on networks
+  // that kill long-lived connections.
+  initializeFirestore(firebase.app(), {
+    experimentalForceLongPolling: true,
+  });
+
+  const firestore = firebase.firestore();
+
+  firestore.enablePersistence()
+    .catch(async (err) => {
       if (err.code === "failed-precondition") {
-        console.warn("Firestore persistence unavailable: multiple tabs open.");
+        try {
+          await firestore.clearPersistence();
+          await firestore.enablePersistence();
+        } catch (retryErr) {
+          console.warn("Firestore persistence could not be enabled. Using memory cache.");
+        }
       } else if (err.code === "unimplemented") {
         console.warn("Firestore persistence not supported by this browser.");
       }

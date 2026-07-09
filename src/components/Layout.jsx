@@ -22,7 +22,7 @@ export function GlobalLoader() {
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
         <div className="spinner spinner--lg"></div>
         <div style={{ textAlign: "center" }}>
-          <h4 style={{ margin: "0 0 4px" }}>MCQ Practice</h4>
+          <h4 style={{ margin: "0 0 4px" }}>MCQ Test</h4>
           <span className="eyebrow">Initializing session…</span>
         </div>
       </div>
@@ -56,7 +56,7 @@ export function Navbar() {
     <nav className="nav">
       <button className="nav__brand" onClick={handleLogoClick}>
         <span className="nav__mark">✦</span>
-        MCQ Practice
+        MCQ Test
       </button>
 
       <div className="nav__right">

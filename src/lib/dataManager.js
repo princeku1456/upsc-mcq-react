@@ -7,11 +7,9 @@ import { getDb } from "./firebase";
 export const DataManager = {
     cache: {
         quizManifest: null,
-        practiceManifest: null,
         quizzes: {},     // Cache for specific quiz/chapter data
-        practice: {},
-        geminiKey: null,     // Cache for practice questions
-        globalStats: {} // NEW: In-memory cache for global stats
+        geminiKey: null,
+        globalStats: {} // In-memory cache for global stats
     },
 
     /**
@@ -89,8 +87,6 @@ export const DataManager = {
 
         if (data) {
             this.cache.quizManifest = data;
-            // Maintain backward compatibility
-            window.allQuizData = data;
         }
         return data;
     },
@@ -109,31 +105,6 @@ export const DataManager = {
 
         if (data) {
             this.cache.geminiKey = data;
-        }
-        return data;
-    },
-
-    /**
-     * Fetches the practice manifest
-     */
-    async fetchPracticeManifest(forceRefresh = false) {
-        if (!forceRefresh && this.cache.practiceManifest) {
-            return this.cache.practiceManifest;
-        }
-
-        const data = await this.fetchWithCache(
-            "practice_manifest",
-            async () => {
-                const doc = await getDb().collection("quiz_metadata").doc("practice_manifest").get();
-                return doc.exists ? doc.data() : null;
-            },
-            86400000, // 24 hours
-            forceRefresh
-        );
-
-        if (data) {
-            this.cache.practiceManifest = data;
-            window.allPracticeData = data;
         }
         return data;
     },
@@ -159,29 +130,6 @@ export const DataManager = {
             this.cache.quizzes[chapterId] = data;
         }
         return data;
-    },
-
-    /**
-     * Fetches practice questions
-     */
-    async fetchPracticeQuestions(docId) {
-        if (this.cache.practice[docId]) {
-            return this.cache.practice[docId];
-        }
-
-        const data = await this.fetchWithCache(
-            `practice_questions_${docId}`,
-            async () => {
-                const doc = await getDb().collection("practice_mcqs").doc(docId).get();
-                return doc.exists ? (doc.data().questions || []) : [];
-            },
-            86400000 // 24 hours
-        );
-
-        if (data) {
-            this.cache.practice[docId] = data;
-        }
-        return data || [];
     },
 
     /**
@@ -304,94 +252,6 @@ export const DataManager = {
 
         } catch (e) {
             console.error("History Sync Error:", e);
-            return cachedData || [];
-        }
-    },
-
-    /**
-     * Syncs practice history incrementally
-     */
-    async syncPracticeHistory(userId, forceRefresh = false) {
-        const cacheKey = `user_practice_history_${userId}`;
-        let cachedData = null;
-
-        // 1. Try to load from IDB
-        if (!forceRefresh) {
-            const entry = await IDB.get(cacheKey);
-            if (entry) {
-                cachedData = entry.data;
-            }
-        }
-
-        // 2. Determine latest timestamp
-        let lastTimestamp = null;
-        if (cachedData && cachedData.length > 0) {
-            const maxDate = cachedData.reduce((max, item) => {
-                let current = null;
-                if (item.timestamp) {
-                    if (item.timestamp.seconds) {
-                         current = new Date(item.timestamp.seconds * 1000);
-                    } else if (typeof item.timestamp === 'string') {
-                         current = new Date(item.timestamp);
-                    }
-                }
-                return (current && (!max || current > max)) ? current : max;
-            }, null);
-
-            if (maxDate) {
-                lastTimestamp = maxDate;
-            }
-        }
-
-        console.log("Last Practice Sync Timestamp:", lastTimestamp);
-
-        // 3. Query Firestore
-        let query = getDb().collection("practiceResult")
-            .where("userId", "==", userId)
-            .orderBy("timestamp", "desc");
-
-        if (lastTimestamp) {
-            query = query.endBefore(lastTimestamp);
-        }
-
-        try {
-            const snapshot = await query.get();
-            console.log("Firestore Practice Snapshot Size:", snapshot.size);
-
-            // 4. Merge Data
-            const newDocs = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-
-            if (newDocs.length === 0) {
-                console.log("No new practice history to sync.");
-                return cachedData || [];
-            }
-
-            console.log(`Synced ${newDocs.length} new practice records.`);
-
-            // Deduplicate
-            const combined = [...newDocs, ...(cachedData || [])];
-            const unique = [];
-            const ids = new Set();
-            for (const item of combined) {
-                if (!ids.has(item.id)) {
-                    unique.push(item);
-                    ids.add(item.id);
-                }
-            }
-
-            // 5. Update Cache
-            await IDB.set(cacheKey, {
-                data: unique,
-                timestamp: Date.now()
-            });
-
-            return unique;
-
-        } catch (e) {
-            console.error("Practice History Sync Error:", e);
             return cachedData || [];
         }
     }

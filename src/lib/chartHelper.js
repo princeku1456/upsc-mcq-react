@@ -2,13 +2,14 @@
    3. CHART HELPER (ported verbatim from utils.js)
    ========================================= */
 import Chart from "chart.js/auto";
+import { isDarkTheme } from "../config/theme";
 export { Chart };
 
 export const ChartHelper = {
     renderConfidenceChart(ctx, values, stats) {
         if (!ctx) return null;
 
-        const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+        const isDark = isDarkTheme();
         const textColor = isDark ? "#e5e7eb" : "#666";
 
         return new Chart(ctx, {
@@ -96,7 +97,7 @@ export const ChartHelper = {
         gradientFill.addColorStop(0, "rgba(37, 99, 235, 0.4)");
         gradientFill.addColorStop(1, "rgba(37, 99, 235, 0.0)");
 
-        const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+        const isDark = isDarkTheme();
         const textColor = isDark ? "#9ca3af" : "#6b7280";
         const gridColor = isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)";
         const tooltipBg = isDark ? "rgba(30, 41, 59, 0.95)" : "rgba(255, 255, 255, 0.95)";

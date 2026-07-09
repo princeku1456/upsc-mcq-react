@@ -50,6 +50,10 @@ export class QuizTimer {
         this.interval = null;
     }
 
+    getTimeLeft() {
+        return this.secondsRemaining;
+    }
+
     updateDisplay() {
         const m = Math.floor(this.secondsRemaining / 60);
         const s = this.secondsRemaining % 60;
