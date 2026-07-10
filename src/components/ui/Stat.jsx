@@ -1,6 +1,6 @@
-import React from "react";
+import React, { memo } from "react";
 
-export default function Stat({ variant, label, value, sub }) {
+const Stat = memo(function Stat({ variant, label, value, sub }) {
   const vClass = variant ? `stat--${variant}` : "";
   return (
     <div className={`stat ${vClass}`}>
@@ -9,4 +9,6 @@ export default function Stat({ variant, label, value, sub }) {
       {sub && <span className="stat__sub">{sub}</span>}
     </div>
   );
-}
+});
+
+export default Stat;

@@ -1,9 +1,11 @@
-import React from "react";
+import React, { memo } from "react";
 
-export default function Badge({ variant = "pen", className = "", children }) {
+const Badge = memo(function Badge({ variant = "pen", className = "", children }) {
   return (
     <span className={`badge badge--${variant} ${className}`}>
       {children}
     </span>
   );
-}
+});
+
+export default Badge;

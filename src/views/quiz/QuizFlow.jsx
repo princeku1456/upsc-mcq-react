@@ -49,7 +49,7 @@ export default function QuizFlow() {
     s.questionTimeSpent = questionTimeSpent;
   }, [getCurrentIndex, questionTimeSpent, s]);
 
-  const saveQuizProgress = useCallback(() => {
+  const saveQuizProgressNow = useCallback(() => {
     saveProgress(s.currentChapterId, s.userAnswers, s.markedForReview, getCurrentIndex(), questionTimeSpent, getTimeLeft, s.quizSubmitted);
   }, [s, getCurrentIndex, questionTimeSpent, getTimeLeft, saveProgress]);
 
@@ -62,7 +62,7 @@ export default function QuizFlow() {
     });
   }, [startTimer, resetTimeTracking]);
 
-  const toggleTimer = () => {
+  const toggleTimer = useCallback(() => {
     if (s.quizSubmitted) return;
     if (isTimerPaused) {
       toggleTimerHook();
@@ -73,7 +73,7 @@ export default function QuizFlow() {
       toggleTimerHook();
       toastr.warning("Timer Paused. Options disabled.");
     }
-  };
+  }, [s.quizSubmitted, isTimerPaused, toggleTimerHook, resetTimeTracking, updateTimeSpent]);
 
   const submitAll = useCallback((forceSubmit = false) => {
     if (!forceSubmit && !window.confirm("Are you sure you want to submit?")) return;
@@ -180,63 +180,63 @@ export default function QuizFlow() {
     if (!s.quizSubmitted && phase === QUIZ_PHASES.ACTIVE) {
       updateTimeSpent();
       syncNavToStore();
-      saveQuizProgress();
+      saveQuizProgressNow();
     }
     stopTimer();
     const r = viewParams.referrer;
     if (r === "dashboard") showDashboard();
     else if (r === "chapters" || r === "subjects") showChapters(s.currentSubject);
     else showDashboard();
-  }, [s, phase, viewParams.referrer, updateTimeSpent, syncNavToStore, saveQuizProgress, stopTimer, showDashboard, showChapters]);
+  }, [s, phase, viewParams.referrer, updateTimeSpent, syncNavToStore, saveQuizProgressNow, stopTimer, showDashboard, showChapters]);
 
-  const gotoQuestion = (idx) => {
+  const gotoQuestion = useCallback((idx) => {
     if (navigateToIndex(idx)) { syncNavToStore(); forceUpdate(); }
-  };
+  }, [navigateToIndex, syncNavToStore]);
 
-  const navigateQuestions = (step) => {
+  const navigateQuestions = useCallback((step) => {
     if (stepNavigation(step)) { syncNavToStore(); forceUpdate(); }
-  };
+  }, [stepNavigation, syncNavToStore]);
 
-  const selectAnswer = (idx) => {
+  const selectAnswer = useCallback((idx) => {
     if (s.quizSubmitted) return;
     if (!s.userAnswers[s.currentQuestionIndex]) {
       s.userAnswers[s.currentQuestionIndex] = { answer: idx, surety: 100 };
     } else {
       s.userAnswers[s.currentQuestionIndex].answer = idx;
     }
-    saveQuizProgress();
+    saveQuizProgressNow();
     forceUpdate();
-  };
+  }, [s, saveQuizProgressNow]);
 
-  const selectSurety = (val) => {
+  const selectSurety = useCallback((val) => {
     if (s.quizSubmitted) return;
     if (!s.userAnswers[s.currentQuestionIndex]) return;
     s.userAnswers[s.currentQuestionIndex].surety = val;
-    saveQuizProgress();
+    saveQuizProgressNow();
     forceUpdate();
-  };
+  }, [s, saveQuizProgressNow]);
 
-  const clearSelection = () => {
+  const clearSelection = useCallback(() => {
     if (s.quizSubmitted) return;
     delete s.userAnswers[s.currentQuestionIndex];
-    saveQuizProgress();
+    saveQuizProgressNow();
     forceUpdate();
-  };
+  }, [s, saveQuizProgressNow]);
 
-  const toggleMarkForReview = () => {
+  const toggleMarkForReview = useCallback(() => {
     if (s.quizSubmitted) return;
     if (s.markedForReview[s.currentQuestionIndex]) {
       delete s.markedForReview[s.currentQuestionIndex];
     } else {
       s.markedForReview[s.currentQuestionIndex] = true;
     }
-    saveQuizProgress();
+    saveQuizProgressNow();
     forceUpdate();
-  };
+  }, [s, saveQuizProgressNow]);
 
-  const reviewAfterSubmit = () => {
+  const reviewAfterSubmit = useCallback(() => {
     loadQuiz(s.currentSubject, s.currentChapterId, s.currentChapterName, true, s.submittedResult.resultObject, "chapters");
-  };
+  }, [s, loadQuiz]);
 
   if (phase === QUIZ_PHASES.LOADING) return <QuizLoading />;
 

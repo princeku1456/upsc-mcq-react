@@ -1,7 +1,11 @@
-import React from "react";
+import React, { memo, useCallback } from "react";
 import { LABEL_MAP } from "../../config/constants";
 
-export default function OptionGroup({ options, correctIndex, selectedIndex, disabled, submitted, onSelect }) {
+const OptionGroup = memo(function OptionGroup({ options, correctIndex, selectedIndex, disabled, submitted, onSelect }) {
+  const handleClick = useCallback((e) => {
+    onSelect(Number(e.currentTarget.dataset.idx));
+  }, [onSelect]);
+
   return (
     <div className="grid">
       {options.map((opt, idx) => {
@@ -25,9 +29,10 @@ export default function OptionGroup({ options, correctIndex, selectedIndex, disa
         return (
           <button
             key={idx}
+            data-idx={idx}
             className={optionClass}
             disabled={disabled || submitted}
-            onClick={() => onSelect(idx)}
+            onClick={handleClick}
           >
             <div className={omrClass}>{LABEL_MAP[idx]}</div>
             <div className="option__text" dangerouslySetInnerHTML={{ __html: opt }} />
@@ -36,4 +41,6 @@ export default function OptionGroup({ options, correctIndex, selectedIndex, disa
       })}
     </div>
   );
-}
+});
+
+export default OptionGroup;

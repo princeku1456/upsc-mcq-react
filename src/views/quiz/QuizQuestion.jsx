@@ -1,9 +1,9 @@
-import React from "react";
+import React, { memo } from "react";
 import OptionGroup from "../../components/ui/OptionGroup";
 import ConfidenceBar from "../../components/ui/ConfidenceBar";
 import { TextFormatter } from "../../lib/helpers";
 
-export default function QuizQuestion({
+const QuizQuestion = memo(function QuizQuestion({
   question,
   currentQuestionIndex,
   totalQuestions,
@@ -78,4 +78,6 @@ export default function QuizQuestion({
       </div>
     </div>
   );
-}
+});
+
+export default QuizQuestion;

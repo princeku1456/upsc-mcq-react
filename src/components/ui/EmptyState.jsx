@@ -1,6 +1,6 @@
-import React from "react";
+import React, { memo } from "react";
 
-export default function EmptyState({ icon, title, message }) {
+const EmptyState = memo(function EmptyState({ icon, title, message }) {
   return (
     <div className="page empty">
       {icon && <div className="empty__icon">{icon}</div>}
@@ -8,4 +8,6 @@ export default function EmptyState({ icon, title, message }) {
       {message && <p>{message}</p>}
     </div>
   );
-}
+});
+
+export default EmptyState;

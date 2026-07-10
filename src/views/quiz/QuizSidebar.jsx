@@ -1,8 +1,8 @@
-import React from "react";
+import React, { memo, useCallback } from "react";
 import TimerDisplay from "../../components/ui/TimerDisplay";
 import QuestionPalette from "../../components/ui/QuestionPalette";
 
-export default function QuizSidebar({
+const QuizSidebar = memo(function QuizSidebar({
   timerDisplay,
   timerLow,
   isTimerPaused,
@@ -15,6 +15,8 @@ export default function QuizSidebar({
   onSelectQuestion,
   onSubmit,
 }) {
+  const handleSubmit = useCallback(() => onSubmit(false), [onSubmit]);
+
   return (
     <div className="sidebar">
       <div className="card" style={{ padding: "16px 14px", marginBottom: 14 }}>
@@ -41,7 +43,7 @@ export default function QuizSidebar({
 
         {!isSubmitted && (
           <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 10 }}>
-            <button className="btn btn--success btn--block" onClick={() => onSubmit(false)}>
+            <button className="btn btn--success btn--block" onClick={handleSubmit}>
               Submit Test
             </button>
           </div>
@@ -49,4 +51,6 @@ export default function QuizSidebar({
       </div>
     </div>
   );
-}
+});
+
+export default QuizSidebar;

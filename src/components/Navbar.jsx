@@ -1,14 +1,24 @@
-import React, { useCallback, useState } from "react";
+import React, { memo, useCallback, useState } from "react";
 import { useApp } from "../store";
 import { useClickOutside } from "../hooks/useClickOutside";
 
-export function Navbar() {
+export const Navbar = memo(function Navbar() {
   const { currentUser, theme, toggleTheme, handleLogoClick, showDashboard, logoutUser } =
     useApp();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const closeDropdown = useCallback(() => setDropdownOpen(false), []);
   const dropdownRef = useClickOutside(closeDropdown);
+
+  const handleDashboardClick = useCallback(() => {
+    setDropdownOpen(false);
+    showDashboard();
+  }, [showDashboard]);
+
+  const handleLogoutClick = useCallback(() => {
+    setDropdownOpen(false);
+    logoutUser();
+  }, [logoutUser]);
 
   const userName =
     currentUser && currentUser.email ? currentUser.email.split("@")[0] : "User";
@@ -43,14 +53,14 @@ export function Navbar() {
             <div className={`dropdown__menu ${dropdownOpen ? "dropdown__menu--open" : ""}`}>
               <button
                 className="dropdown__item"
-                onClick={() => { setDropdownOpen(false); showDashboard(); }}
+                onClick={handleDashboardClick}
               >
                 📊 Dashboard
               </button>
               <div className="dropdown__divider"></div>
               <button
                 className="dropdown__item dropdown__item--danger"
-                onClick={() => { setDropdownOpen(false); logoutUser(); }}
+                onClick={handleLogoutClick}
               >
                 🚪 Logout
               </button>
@@ -60,4 +70,4 @@ export function Navbar() {
       </div>
     </nav>
   );
-}
+});

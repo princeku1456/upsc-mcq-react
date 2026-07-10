@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, memo } from "react";
 
 function getModalClass(size) {
   if (size === "lg") return "modal modal--lg";
@@ -6,7 +6,7 @@ function getModalClass(size) {
   return "modal";
 }
 
-export default function Modal({ title, children, onClose, size, actions }) {
+const Modal = memo(function Modal({ title, children, onClose, size, actions }) {
   useEffect(() => {
     const handleEsc = (e) => {
       if (e.key === "Escape" && onClose) onClose();
@@ -24,4 +24,6 @@ export default function Modal({ title, children, onClose, size, actions }) {
       </div>
     </div>
   );
-}
+});
+
+export default Modal;

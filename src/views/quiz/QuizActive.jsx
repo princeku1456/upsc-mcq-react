@@ -1,10 +1,10 @@
-import React from "react";
+import React, { memo } from "react";
 import QuizQuestion from "./QuizQuestion";
 import QuizSidebar from "./QuizSidebar";
 import QuizResult from "./QuizResult";
 import { getCorrectIndex } from "../../lib/helpers";
 
-export default function QuizActive({
+const QuizActive = memo(function QuizActive({
   quizData,
   currentQuestionIndex,
   userAnswers,
@@ -71,4 +71,6 @@ export default function QuizActive({
       </div>
     </div>
   );
-}
+});
+
+export default QuizActive;

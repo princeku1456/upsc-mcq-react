@@ -1,6 +1,6 @@
-import React from "react";
+import React, { memo } from "react";
 
-export default function Spinner({ size = "md", text }) {
+const Spinner = memo(function Spinner({ size = "md", text }) {
   const cls = size === "lg" ? "spinner spinner--lg" : "spinner";
   return (
     <div className="empty">
@@ -8,4 +8,6 @@ export default function Spinner({ size = "md", text }) {
       {text && <p style={{ marginTop: 14 }}>{text}</p>}
     </div>
   );
-}
+});
+
+export default Spinner;

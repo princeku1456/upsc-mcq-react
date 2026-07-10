@@ -1,6 +1,6 @@
-import React from "react";
+import React, { memo } from "react";
 
-export default function PageShell({ heroTitle, heroSubtitle, children }) {
+const PageShell = memo(function PageShell({ heroTitle, heroSubtitle, children }) {
   return (
     <div className="page">
       {(heroTitle || heroSubtitle) && (
@@ -12,4 +12,6 @@ export default function PageShell({ heroTitle, heroSubtitle, children }) {
       {children}
     </div>
   );
-}
+});
+
+export default PageShell;

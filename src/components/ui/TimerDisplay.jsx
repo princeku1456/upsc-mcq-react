@@ -1,6 +1,6 @@
-import React from "react";
+import React, { memo } from "react";
 
-export default function TimerDisplay({ text, low, onToggle, isPaused, showControls }) {
+const TimerDisplay = memo(function TimerDisplay({ text, low, onToggle, isPaused, showControls }) {
   return (
     <>
       <div className={`timer-pill ${low ? "timer-pill--low" : ""}`} style={{ width: "100%", justifyContent: "center", fontSize: 18, padding: "12px 16px", marginBottom: 14 }}>
@@ -15,4 +15,6 @@ export default function TimerDisplay({ text, low, onToggle, isPaused, showContro
       )}
     </>
   );
-}
+});
+
+export default TimerDisplay;

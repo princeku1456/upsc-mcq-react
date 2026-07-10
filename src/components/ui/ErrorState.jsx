@@ -1,6 +1,6 @@
-import React from "react";
+import React, { memo } from "react";
 
-export default function ErrorState({ message, onRetry }) {
+const ErrorState = memo(function ErrorState({ message, onRetry }) {
   return (
     <div className="page empty">
       <div className="empty__icon">⚠️</div>
@@ -13,4 +13,6 @@ export default function ErrorState({ message, onRetry }) {
       )}
     </div>
   );
-}
+});
+
+export default ErrorState;

@@ -1,7 +1,11 @@
-import React from "react";
+import React, { memo, useCallback } from "react";
 import { getCorrectIndex } from "../../lib/helpers";
 
-export default function QuestionPalette({ quizData, currentIndex, userAnswers, markedForReview, submitted, onSelect }) {
+const QuestionPalette = memo(function QuestionPalette({ quizData, currentIndex, userAnswers, markedForReview, submitted, onSelect }) {
+  const handleClick = useCallback((e) => {
+    onSelect(Number(e.currentTarget.dataset.idx));
+  }, [onSelect]);
+
   return (
     <div className="palette">
       {quizData.map((_, i) => {
@@ -22,11 +26,13 @@ export default function QuestionPalette({ quizData, currentIndex, userAnswers, m
         }
 
         return (
-          <button key={i} className={cls} onClick={() => onSelect(i)}>
+          <button key={i} data-idx={i} className={cls} onClick={handleClick}>
             {i + 1}
           </button>
         );
       })}
     </div>
   );
-}
+});
+
+export default QuestionPalette;

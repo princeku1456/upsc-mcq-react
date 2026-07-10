@@ -1,6 +1,6 @@
-import React from "react";
+import React, { memo } from "react";
 
-export default function ProgressBar({ value, variant }) {
+const ProgressBar = memo(function ProgressBar({ value, variant }) {
   const fillCls = variant === "leaf"
     ? "progress__fill--leaf"
     : variant === "marker"
@@ -15,4 +15,6 @@ export default function ProgressBar({ value, variant }) {
       ></div>
     </div>
   );
-}
+});
+
+export default ProgressBar;

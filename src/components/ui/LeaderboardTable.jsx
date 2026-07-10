@@ -1,6 +1,6 @@
-import React from "react";
+import React, { memo } from "react";
 
-export default function LeaderboardTable({ entries, currentUserEmail }) {
+const LeaderboardTable = memo(function LeaderboardTable({ entries, currentUserEmail }) {
   if (!entries) {
     return (
       <div className="empty">
@@ -31,7 +31,7 @@ export default function LeaderboardTable({ entries, currentUserEmail }) {
           {entries.map((entry, idx) => {
             const isMe = currentUserEmail && currentUserEmail === entry.userEmail;
             return (
-              <tr key={idx} className={isMe ? "highlight" : ""}>
+              <tr key={entry.userEmail || idx} className={isMe ? "highlight" : ""}>
                 <td style={{ fontWeight: 700 }}>
                   {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx + 1}`}
                 </td>
@@ -49,4 +49,6 @@ export default function LeaderboardTable({ entries, currentUserEmail }) {
       </table>
     </div>
   );
-}
+});
+
+export default LeaderboardTable;

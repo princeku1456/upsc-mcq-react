@@ -1,18 +1,12 @@
-import React from "react";
+import React, { memo } from "react";
 import { getCorrectIndex, DifficultyHelper, TextFormatter } from "../../lib/helpers";
 
-export default function ReviewQuestionCard({ question, idx, userAnswer, reviewStats, questionTimeSpent, isRevision, statusFilter, subjectFilter }) {
+const ReviewQuestionCard = memo(function ReviewQuestionCard({ question, idx, userAnswer, reviewStats, questionTimeSpent, isRevision }) {
   const cIdx = getCorrectIndex(question);
   const uAns = userAnswer;
 
   let statusStr = "unattempted";
   if (uAns) statusStr = uAns.answer === cIdx ? "correct" : "incorrect";
-
-  if (statusFilter !== "all" && statusStr !== statusFilter) return null;
-  if (subjectFilter !== "all") {
-    const hasTag = question.tags && question.tags.includes(`subject:${subjectFilter}`);
-    if (!hasTag) return null;
-  }
 
   let diffHtml = null;
   if (!isRevision && reviewStats) {
@@ -75,4 +69,6 @@ export default function ReviewQuestionCard({ question, idx, userAnswer, reviewSt
       )}
     </div>
   );
-}
+});
+
+export default ReviewQuestionCard;

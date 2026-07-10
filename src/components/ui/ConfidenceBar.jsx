@@ -1,7 +1,11 @@
-import React from "react";
+import React, { memo, useCallback } from "react";
 import { CONFIDENCE_LEVELS } from "../../config/constants";
 
-export default function ConfidenceBar({ value, onChange, disabled }) {
+const ConfidenceBar = memo(function ConfidenceBar({ value, onChange, disabled }) {
+  const handleClick = useCallback((e) => {
+    onChange(Number(e.currentTarget.dataset.level));
+  }, [onChange]);
+
   return (
     <div>
       <span className="eyebrow" style={{ display: "block", marginBottom: 8 }}>Confidence Level</span>
@@ -12,7 +16,7 @@ export default function ConfidenceBar({ value, onChange, disabled }) {
             data-level={level}
             className={`confidence__chip ${value === level ? "confidence__chip--on" : ""}`}
             disabled={disabled}
-            onClick={() => onChange(level)}
+            onClick={handleClick}
           >
             {level}% Confidence
           </button>
@@ -20,4 +24,6 @@ export default function ConfidenceBar({ value, onChange, disabled }) {
       </div>
     </div>
   );
-}
+});
+
+export default ConfidenceBar;
