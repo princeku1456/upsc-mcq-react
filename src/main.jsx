@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./styles.css";
+// import "./theme_gazette.css";
 import { AppProvider } from "./store";
 import App from "./App";
 
