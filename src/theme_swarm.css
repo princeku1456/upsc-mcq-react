@@ -1,0 +1,318 @@
+/* ==================================================================
+   Concept Wallah — "The Aspirant's Gazette · Swarm Edition"
+   ------------------------------------------------------------------
+   A satirical revolutionary-broadsheet skin, inspired by the visual
+   language of movement propaganda newsprint: espresso ink on aged
+   paper, a saffron/rust accent, rubber-stamp badges, italic mastheads
+   and a scrolling wire-ticker — fused with the portal's own exam
+   vocabulary (OMR bubbles, answer keys, negative marking, datelines).
+
+   Light = "Swarm Gazette"   — aged newsprint, daylight reading room.
+   Dark  = "Midnight Swarm"  — one bulb, 2 a.m., saffron ink.
+
+   Import AFTER styles.css:
+       import "./styles.css";
+       import "./theme_swarm.css";
+
+   Every rule re-points existing tokens or patches a known class.
+   No component or class renames required. The wire-ticker and the
+   masthead dateline are the only additive pieces (see NewsTicker.jsx).
+   ================================================================== */
+
+/* ---------- 1. Tokens — light = "Swarm Gazette" ---------- */
+:root {
+  --paper:       #f0e7d4;   /* aged newsprint, tea-stained */
+  --card:        #fbf5e8;   /* fresh sheet, one shade lighter */
+  --ink:         #241811;   /* espresso brown-black (cf. CJP #1A1108) */
+  --ink-soft:    #6d5a49;   /* faded print */
+  --line:        #d6c2a0;   /* dry-paper hairline */
+
+  --pen:         #b23a1e;   /* protest rust — primary action / brand */
+  --pen-soft:    #f6e4d8;
+  --stamp:       #a52d18;   /* deep vermilion — incorrect / negative */
+  --stamp-soft:  #f7e2d9;
+  --leaf:        #3f6a2e;   /* khaki field-green — correct */
+  --leaf-soft:   #e7edda;
+  --marker:      #d98a12;   /* saffron highlighter — marked for review */
+  --marker-soft: #fbeccf;
+
+  --seal:        #b23a1e;   /* rubber-stamp ink: eyebrows, brand mark */
+  --wire-bg:     #241811;   /* the ticker rail */
+  --wire-ink:    #f4ead2;   /* teletype text on the rail */
+
+  --radius:      3px;       /* pressed paper, not soft plastic */
+  --radius-sm:   2px;
+  --shadow:      0 1px 0 rgba(36,24,17,0.05),
+                 0 2px 0 rgba(36,24,17,0.03),
+                 0 12px 26px -18px rgba(36,24,17,0.35);
+
+  --font-display: "Fraunces", "Playfair Display", Georgia, serif;
+  --font-body:    "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono:    "IBM Plex Mono", ui-monospace, monospace;
+}
+
+/* ---------- 2. Tokens — dark = "Midnight Swarm" ---------- */
+[data-theme="dark"] {
+  --paper:       #171009;   /* burnt-brown night (cf. CJP theme-color) */
+  --card:        #201811;
+  --ink:         #f2e7d3;   /* paper-white ink */
+  --ink-soft:    #a8967f;
+  --line:        #362a1e;
+
+  --pen:         #e5a11f;   /* saffron — primary action by lamplight */
+  --pen-soft:    #2f2410;
+  --stamp:       #ef6b4e;   /* warm vermilion, readable on brown */
+  --stamp-soft:  #3a2016;
+  --leaf:        #7fb85c;   /* field-green, lifted for contrast */
+  --leaf-soft:   #1f2b16;
+  --marker:      #e0b35a;   /* aged gold — marked for review */
+  --marker-soft: #33270f;
+
+  --seal:        #e5a11f;
+  --wire-bg:     #0f0a05;
+  --wire-ink:    #e5a11f;
+
+  --radius:      5px;
+  --radius-sm:   3px;
+  --shadow:      0 1px 2px rgba(0,0,0,0.5),
+                 0 14px 30px -18px rgba(0,0,0,0.7);
+}
+
+/* ---------- 3. Contrast patches (saffron primary on dark) ---------- */
+[data-theme="dark"] .btn--primary,
+[data-theme="dark"] .btn--success,
+[data-theme="dark"] .palette__cell--answered,
+[data-theme="dark"] .palette__cell--correct,
+[data-theme="dark"] .palette__cell--wrong,
+[data-theme="dark"] .omr--correct,
+[data-theme="dark"] .omr--wrong,
+[data-theme="dark"] .progress__fill { color: #171009; }
+
+[data-theme="dark"] .btn--success { background: var(--leaf); }
+
+[data-theme="dark"] .palette__cell--marked {
+  background: var(--marker-soft);
+  border-color: var(--marker);
+  color: var(--marker);
+}
+
+/* ==================================================================
+   4. Aged-paper atmosphere  (light only — dark stays clean)
+   ================================================================== */
+:root:not([data-theme="dark"]) body {
+  background:
+    radial-gradient(1200px 600px at 12% -10%, rgba(217,138,18,0.06), transparent 60%),
+    radial-gradient(900px 500px at 108% 8%,  rgba(178,58,30,0.05),  transparent 55%),
+    var(--paper);
+  font-size: 15.5px;
+}
+/* faint newsprint grain */
+:root:not([data-theme="dark"]) body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+}
+:root:not([data-theme="dark"]) #root { position: relative; z-index: 1; }
+
+/* ==================================================================
+   5. Typography — the broadsheet voice
+   ================================================================== */
+h1, h2, h3, h4,
+.card__title, .modal__title, .stat__value, .score-strip__big {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+h1 { letter-spacing: -0.02em; }
+
+/* Emphasis word rendered italic — CJP's single-italicised-word signature.
+   Add <span class="em">word</span>, or it gracefully no-ops. */
+.em { font-family: var(--font-display); font-style: italic; font-weight: 600; }
+
+/* Serif question stems — the paper you actually sit for */
+.question__text, .qtext, .option__text { font-family: var(--font-display); }
+.option__text { font-weight: 500; }
+
+/* Dateline eyebrow — mono, letter-spaced, stamped in seal ink */
+.eyebrow {
+  font-family: var(--font-mono);
+  color: var(--seal);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.eyebrow::before { content: "✦ "; opacity: 0.7; }
+
+/* Highlighter becomes a saffron marker rule (CJP underline treatment) */
+.hl {
+  background: none;
+  box-shadow: inset 0 -0.42em 0 var(--marker-soft);
+  border-bottom: 2.5px solid var(--marker);
+  padding: 0 1px;
+}
+
+/* ==================================================================
+   6. Masthead — the navbar as a gazette flag
+   ================================================================== */
+.nav {
+  background: var(--paper);
+  border-bottom: 4px double var(--ink);
+  position: relative;
+}
+.nav__brand {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+.nav__mark { color: var(--seal); }
+.nav__user { font-family: var(--font-mono); letter-spacing: 0.02em; }
+
+/* A tiny motto slug under the flag, mono, hidden on narrow screens */
+.nav__brand::after {
+  content: "Est. 2026 · No. 001";
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  margin-top: 1px;
+}
+
+/* ==================================================================
+   7. The Wire — scrolling ticker rail  (NewsTicker.jsx)
+   ================================================================== */
+.wire {
+  background: var(--wire-bg);
+  color: var(--wire-ink);
+  border-bottom: 1px solid var(--ink);
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+.wire__track {
+  display: inline-block;
+  padding: 7px 0;
+  animation: wire-scroll 42s linear infinite;
+  will-change: transform;
+}
+.wire__item { padding: 0 4px; }
+.wire__item--live { color: var(--marker); font-weight: 600; }
+.wire__sep { color: var(--seal); padding: 0 10px; }
+.wire:hover .wire__track { animation-play-state: paused; }
+@keyframes wire-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wire__track { animation: none; }
+}
+
+/* ==================================================================
+   8. Cards, stats, badges — ruled documents, not floating tiles
+   ================================================================== */
+.card { border: 1.5px solid var(--ink); border-radius: var(--radius); }
+.card__head { border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+.card__title { font-size: 18px; }
+
+/* Action / subject / chapter cards get an inked spine that rotates hue */
+.action-card {
+  border-left: 5px solid var(--seal);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  transition: border-left-width 0.12s ease, transform 0.12s ease;
+}
+.action-card:hover { border-left-width: 8px; transform: translateY(-1px); }
+.subjects-grid > *:nth-child(3n+2) .action-card,
+.chapters-grid > *:nth-child(3n+2) .action-card { border-left-color: var(--marker); }
+.subjects-grid > *:nth-child(3n) .action-card,
+.chapters-grid > *:nth-child(3n) .action-card { border-left-color: var(--leaf); }
+
+/* Stat strip reads as one ruled ledger table */
+.stats-grid {
+  gap: 0;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.stats-grid .stat {
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--card);
+}
+.stats-grid .stat:last-child { border-right: 0; }
+.stat__value { font-family: var(--font-display); font-weight: 600; }
+
+/* Badges as inked rubber stamps */
+.badge {
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1.5px solid currentColor;
+  transform: rotate(-0.6deg);
+}
+
+/* ==================================================================
+   9. Buttons — the primary reads like a stamped form
+   ================================================================== */
+.btn { border-radius: var(--radius-sm); letter-spacing: 0.01em; }
+.btn--primary { background: var(--ink); border-color: var(--ink); color: var(--card); }
+.btn--primary:hover:not(:disabled) { background: var(--seal); border-color: var(--seal); filter: none; }
+.btn--ghost { border-width: 1.5px; border-color: var(--ink); color: var(--ink); }
+.btn--ghost:hover:not(:disabled) { background: var(--pen-soft); border-color: var(--seal); }
+[data-theme="dark"] .btn--primary { background: var(--pen); border-color: var(--pen); }
+[data-theme="dark"] .btn--primary:hover:not(:disabled) { filter: brightness(1.08); }
+
+/* ==================================================================
+   10. Exam surfaces — OMR options, tabs, timer, progress
+   ================================================================== */
+.option { border-width: 1.25px; border-radius: var(--radius); }
+.option--selected { border: 1.5px solid var(--seal); background: var(--pen-soft); }
+.option--correct { border-width: 1.5px; }
+.omr { font-family: var(--font-display); font-weight: 600; }
+
+/* Tabs as underlined section heads */
+.tabs {
+  border-radius: 0;
+  border: 0;
+  border-bottom: 1.5px solid var(--line);
+  background: transparent;
+  padding: 0;
+}
+.tabs__tab { border-radius: 0; padding: 9px 14px; font-family: var(--font-mono); font-size: 12.5px; letter-spacing: 0.04em; }
+.tabs__tab--active,
+.tabs__tab[aria-selected="true"] {
+  background: transparent;
+  box-shadow: none;
+  border-bottom: 3px solid var(--seal);
+  color: var(--ink);
+}
+
+.timer-pill { border: 1.5px solid var(--pen); color: var(--pen); border-radius: var(--radius-sm); font-family: var(--font-mono); }
+.timer-pill--low { animation: none; }
+
+.progress { height: 20px; border-radius: 0; background: color-mix(in srgb, var(--line) 70%, transparent); }
+.progress__fill, .progress__fill--leaf, .progress__fill--marker { border-radius: 0; }
+
+/* Login card gets the ruled-document frame + a stamped kicker */
+.login__card { border: 1.5px solid var(--ink); border-radius: var(--radius); }
+
+/* Explanation block reads like an editor's margin note */
+.explanation {
+  border-left: 3px solid var(--marker);
+  background: var(--marker-soft);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
