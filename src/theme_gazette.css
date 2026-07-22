@@ -174,5 +174,5 @@
 :root:not([data-theme="dark"]) .timer-pill { border: 1.5px solid var(--pen); color: var(--pen); }
 
 /* Progress bars: thin ruled measures */
-:root:not([data-theme="dark"]) .progress { height: 6px; border-radius: 0; background: #eeeadf; }
+:root:not([data-theme="dark"]) .progress { height: 28px; border-radius: 0; background: #eeeadf; }
 :root:not([data-theme="dark"]) .progress__fill { border-radius: 0; background: var(--leaf); }

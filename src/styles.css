@@ -245,7 +245,7 @@ a { color: var(--pen); text-decoration: none; }
 }
 
 .progress {
-  height: 20px;
+  height: 28px;
   border-radius: 5px;
   background: var(--line);
   overflow: hidden;

@@ -12,7 +12,7 @@ const SubjectCard = memo(function SubjectCard({ subject, subjTests, attempted, p
   return (
     <div
       className="card action-card"
-      style={{ padding: "20px 16px" }}
+      style={{ padding: "20px 16px 40px" }}
       onClick={handleClick}
     >
       <h3 className="card__title" style={{ marginBottom: 4 }}>{subject}</h3>
