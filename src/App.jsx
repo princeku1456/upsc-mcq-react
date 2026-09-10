@@ -12,13 +12,29 @@ import StartQuizModal from './components/StartQuizModal.jsx';
 import RevisionTestModal from './components/RevisionTestModal.jsx';
 
 export default function App() {
-  const { view, authLoading } = useApp();
+  const { view, authLoading, quizLoading, quizError, clearQuizError } = useApp();
 
   return (
     <>
       <Loader hidden={!authLoading} />
       <Navbar />
       <Breadcrumbs />
+      {quizError && (
+        <div className="container mt-3">
+          <div className="alert alert-danger d-flex justify-content-between align-items-center" role="alert">
+            <span>{quizError}</span>
+            <button type="button" className="btn-close" onClick={clearQuizError} aria-label="Close"></button>
+          </div>
+        </div>
+      )}
+      {quizLoading && (
+        <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{ background: 'rgba(0,0,0,0.35)', zIndex: 2000 }}>
+          <div className="text-center bg-white p-4 rounded-3 shadow">
+            <div className="spinner-border text-primary" role="status"></div>
+            <p className="mt-2 mb-0 text-muted">Loading Quiz...</p>
+          </div>
+        </div>
+      )}
       {!authLoading && view === 'home' && <AuthPage />}
       {!authLoading && view === 'dashboard' && <Dashboard />}
       {!authLoading && view === 'subjects' && <SubjectSelection />}

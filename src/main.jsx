@@ -10,6 +10,7 @@ import toastr from 'toastr';
 import './styles.css';
 import App from './App.jsx';
 import { AppProvider } from './context/AppContext.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 
 toastr.options = {
   closeButton: true,
@@ -20,8 +21,10 @@ toastr.options = {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <AppProvider>
-      <App />
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <App />
+      </AppProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 );

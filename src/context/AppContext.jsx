@@ -83,6 +83,8 @@ export function AppProvider({ children }) {
 
   const [startModal, setStartModal] = useState(null);
   const [revisionModal, setRevisionModal] = useState({ open: false, subject: '' });
+  const [quizLoading, setQuizLoading] = useState(false);
+  const [quizError, setQuizError] = useState(null);
 
   const timerRef = useRef(null);
   const questionStartRef = useRef(null);
@@ -134,21 +136,19 @@ export function AppProvider({ children }) {
     return () => unsub();
   }, []);
 
-  async function performMorningSync() {
-    try {
-      await DataManager.fetchQuizManifest(true);
-      await DataManager.fetchPracticeManifest(true);
-      await DataManager.invalidateCacheByPrefix('quiz_questions_');
-      await DataManager.invalidateCacheByPrefix('practice_questions_');
-      await DataManager.invalidateCacheByPrefix('global_stats_');
-      const qm = await DataManager.fetchQuizManifest();
-      const pm = await DataManager.fetchPracticeManifest();
-      setQuizManifest(qm);
-      setPracticeManifest(pm);
-    } catch (error) {
-      console.error('Morning sync failed:', error);
-    }
+async function performMorningSync() {
+  const lastSync = localStorage.getItem('last_morning_sync');
+  const today = new Date().toDateString();
+  if (lastSync === today) return; // already synced today
+
+  try {
+    await DataManager.fetchQuizManifest(true);
+    await DataManager.fetchPracticeManifest(true);
+    localStorage.setItem('last_morning_sync', today);
+  } catch (error) {
+    console.error('Morning sync failed:', error);
   }
+}
 
   function toggleTheme() {
     setTheme((t) => (t === 'light' ? 'dark' : 'light'));
@@ -218,7 +218,7 @@ export function AppProvider({ children }) {
       if (historyData || practiceData) setDashboardDataLoaded(true);
     } catch (error) {
       console.error('Error loading dashboard:', error);
-      toastr.error('Failed to load performance data.');
+      toastr.error(error?.message || 'Failed to load performance data.');
     }
   }
 
@@ -350,11 +350,15 @@ export function AppProvider({ children }) {
   }
 
   function openStartModal(subject, chapterName, numQuestions, savedTime, onStart) {
-    setStartModal({ subject, chapterName, numQuestions, savedTime, onStart });
+    setStartModal({ subject, chapter: chapterName, numQuestions, savedTime, onStart });
   }
 
   function closeStartModal() {
     setStartModal(null);
+  }
+
+  function clearQuizError() {
+    setQuizError(null);
   }
 
   async function loadQuiz(subjectKey, chapterId, chapterName, reviewMode = false, pastData = null, source = null) {
@@ -386,6 +390,8 @@ export function AppProvider({ children }) {
           { label: decodedName },
         ];
     setBreadcrumbs(crumbs);
+    setQuizError(null);
+    setQuizLoading(true);
 
     try {
       const questions = await DataManager.fetchQuizQuestions(fullChapterId);
@@ -449,8 +455,12 @@ export function AppProvider({ children }) {
       }
     } catch (error) {
       console.error('Firebase fetch error:', error);
-      toastr.error('Failed to load questions.');
+      const message = error?.message || 'Failed to load questions.';
+      setQuizError(message);
+      toastr.error(message);
       showDashboard();
+    } finally {
+      setQuizLoading(false);
     }
   }
 
@@ -1143,6 +1153,9 @@ Provide exactly **3 SMART Tasks** for the very next study session.
     quiz,
     startModal,
     revisionModal,
+    quizLoading,
+    quizError,
+    clearQuizError,
 
     toggleTheme,
     applyTheme,

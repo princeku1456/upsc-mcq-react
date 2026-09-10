@@ -226,17 +226,34 @@ export const DataManager = {
 
   async fetchQuizQuestions(chapterId) {
     if (cache.quizzes[chapterId]) return cache.quizzes[chapterId];
-    const data = await fetchWithCache(
-      `quiz_questions_${chapterId}`,
-      async () => {
-        const docRef = doc(db, 'quizzes', chapterId);
-        const snapshot = await getDoc(docRef);
-        return snapshot.exists() ? snapshot.data().questions : null;
-      },
-      86400000,
-    );
-    if (data) cache.quizzes[chapterId] = data;
-    return data;
+    const cacheKey = `quiz_questions_${chapterId}`;
+    const cachedEntry = await IDB.get(cacheKey);
+    if (cachedEntry) {
+      const age = Date.now() - cachedEntry.timestamp;
+      if (age < 86400000) {
+        cache.quizzes[chapterId] = cachedEntry.data;
+        return cachedEntry.data;
+      }
+    }
+
+    const docRef = doc(db, 'quizzes', chapterId);
+    const snapshot = await Promise.race([
+      getDoc(docRef),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`Timed out loading quiz: quizzes/${chapterId}`)), 15000),
+      ),
+    ]);
+    if (!snapshot.exists()) {
+      throw new Error(`Quiz document not found: quizzes/${chapterId}`);
+    }
+    const questions = snapshot.data().questions;
+    if (!Array.isArray(questions) || questions.length === 0) {
+      throw new Error(`Quiz has no questions: quizzes/${chapterId}`);
+    }
+
+    await IDB.set(cacheKey, { data: questions, timestamp: Date.now() });
+    cache.quizzes[chapterId] = questions;
+    return questions;
   },
 
   async fetchPracticeQuestions(docId) {
@@ -328,7 +345,7 @@ export const DataManager = {
       return unique;
     } catch (e) {
       console.error('History Sync Error:', e);
-      return cachedData || [];
+      throw e;
     }
   },
 
@@ -380,7 +397,7 @@ export const DataManager = {
       return unique;
     } catch (e) {
       console.error('Practice History Sync Error:', e);
-      return cachedData || [];
+      throw e;
     }
   },
 };
