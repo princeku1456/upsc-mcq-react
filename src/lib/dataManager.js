@@ -1,4 +1,5 @@
 import { db } from '../firebase';
+import { DEMO_DATA } from './demoData';
 import {
   doc,
   getDoc,
@@ -182,9 +183,11 @@ export const DataManager = {
     const data = await fetchWithCache(
       'quiz_manifest',
       async () => {
-        const docRef = doc(db, 'quiz_metadata', 'quiz_manifest');
-        const snapshot = await getDoc(docRef);
-        return snapshot.exists() ? snapshot.data() : null;
+        try {
+          const docRef = doc(db, 'quiz_metadata', 'quiz_manifest');
+          const snapshot = await getDoc(docRef);
+          return snapshot.exists() ? snapshot.data() : DEMO_DATA['quiz_metadata/quiz_manifest'];
+        } catch(e) { return DEMO_DATA['quiz_metadata/quiz_manifest']; }
       },
       86400000,
       forceRefresh,
@@ -198,9 +201,11 @@ export const DataManager = {
     const data = await fetchWithCache(
       'practice_manifest',
       async () => {
-        const docRef = doc(db, 'quiz_metadata', 'practice_manifest');
-        const snapshot = await getDoc(docRef);
-        return snapshot.exists() ? snapshot.data() : null;
+        try {
+          const docRef = doc(db, 'quiz_metadata', 'practice_manifest');
+          const snapshot = await getDoc(docRef);
+          return snapshot.exists() ? snapshot.data() : DEMO_DATA['quiz_metadata/practice_manifest'];
+        } catch(e) { return DEMO_DATA['quiz_metadata/practice_manifest']; }
       },
       86400000,
       forceRefresh,
@@ -236,17 +241,30 @@ export const DataManager = {
       }
     }
 
-    const docRef = doc(db, 'quizzes', chapterId);
-    const snapshot = await Promise.race([
-      getDoc(docRef),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`Timed out loading quiz: quizzes/${chapterId}`)), 15000),
-      ),
-    ]);
-    if (!snapshot.exists()) {
-      throw new Error(`Quiz document not found: quizzes/${chapterId}`);
+    let questions = null;
+    try {
+      const docRef = doc(db, 'quizzes', chapterId);
+      const snapshot = await Promise.race([
+        getDoc(docRef),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`Timed out loading quiz: quizzes/${chapterId}`)), 15000),
+        ),
+      ]);
+      if (snapshot.exists()) {
+        questions = snapshot.data().questions;
+      }
+    } catch(e) {
+      console.warn("Failed to fetch from DB, falling back to DEMO_DATA for quizzes", e);
     }
-    const questions = snapshot.data().questions;
+
+    if (!questions) {
+      const demoQuiz = DEMO_DATA[`quizzes/${chapterId}`];
+      if (demoQuiz) {
+        questions = demoQuiz.questions;
+      } else {
+        throw new Error(`Quiz document not found: quizzes/${chapterId}`);
+      }
+    }
     if (!Array.isArray(questions) || questions.length === 0) {
       throw new Error(`Quiz has no questions: quizzes/${chapterId}`);
     }
@@ -261,9 +279,13 @@ export const DataManager = {
     const data = await fetchWithCache(
       `practice_questions_${docId}`,
       async () => {
-        const docRef = doc(db, 'practice_mcqs', docId);
-        const snapshot = await getDoc(docRef);
-        return snapshot.exists() ? snapshot.data().questions || [] : [];
+        try {
+          const docRef = doc(db, 'practice_mcqs', docId);
+          const snapshot = await getDoc(docRef);
+          if (snapshot.exists()) return snapshot.data().questions || [];
+        } catch(e) {}
+        const demoPractice = DEMO_DATA[`practice_mcqs/${docId}`];
+        return demoPractice ? demoPractice.questions || [] : [];
       },
       86400000,
     );
@@ -276,10 +298,24 @@ export const DataManager = {
     const data = await fetchWithCache(
       `global_stats_${chapterId}`,
       async () => {
-        const docRef = doc(db, 'chapter_stats', chapterId);
-        const snapshot = await getDoc(docRef);
-        if (!snapshot.exists()) return null;
-        const d = snapshot.data();
+        try {
+          const docRef = doc(db, 'chapter_stats', chapterId);
+          const snapshot = await getDoc(docRef);
+          if (snapshot.exists()) {
+            const d = snapshot.data();
+            return {
+              avg: d.average || 0,
+              highest: d.highestScore || 0,
+              totalAttempts: d.totalAttempts || 0,
+              allScores: d.allScores || [],
+              leaderboard: d.leaderboard || [],
+              correctCounts: d.correctCounts || [],
+              attemptedCounts: d.attemptedCounts || [],
+            };
+          }
+        } catch(e) {}
+        const d = DEMO_DATA[`chapter_stats/${chapterId}`];
+        if (!d) return null;
         return {
           avg: d.average || 0,
           highest: d.highestScore || 0,
